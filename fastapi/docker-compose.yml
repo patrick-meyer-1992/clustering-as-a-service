@@ -1,0 +1,13 @@
+services:
+  fastapi:
+    container_name: caas-fastapi
+    build: .
+    ports:
+      - "7000:80"
+    networks:
+      - caas-net
+
+networks:
+  caas-net:
+    driver: bridge
+    external: true
