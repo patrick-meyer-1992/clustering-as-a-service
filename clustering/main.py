@@ -83,3 +83,25 @@ def cluster(data: ClusterRequest):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+from bson import ObjectId  # Um MongoDB-IDs korrekt zu verarbeiten
+
+@app.get("/results/{request_id}", response_model=ClusterResponse)
+def get_result(request_id: str):
+    try:
+        # Suche das Ergebnis in der MongoDB anhand der request_id
+        result = results_collection.find_one({"request_id": request_id})
+
+        if result is None:
+            # Wenn kein Ergebnis gefunden wurde, gebe einen 404-Fehler zurück
+            raise HTTPException(status_code=404, detail="Ergebnis nicht gefunden.")
+
+        # Rückgabe des gefundenen Ergebnisses im ClusterResponse-Format
+        return ClusterResponse(
+            labels=result["labels"],
+            centers=result["centers"]
+        )
+
+    except Exception as e:
+        # Fehlerbehandlung, z.B. ungültige ID oder Verbindungsprobleme
+        raise HTTPException(status_code=400, detail=str(e))
