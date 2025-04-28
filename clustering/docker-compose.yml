@@ -1,0 +1,13 @@
+services:
+  clustering:
+    container_name: caas-clustering
+    build: .
+    env_file:
+      - .env
+    networks:
+      - caas-net
+
+networks:
+  caas-net:
+    driver: bridge
+    external: true
