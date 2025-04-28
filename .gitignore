@@ -1,3 +1,4 @@
+*.env
 .venv
 mongodb/data
 postgresql/data
