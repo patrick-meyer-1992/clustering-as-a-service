@@ -27,6 +27,6 @@ def send_message():
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT, credentials=RABBITMQ_CREDENTIALS))
     channel = connection.channel()
     channel.queue_declare(queue=RABBITMQ_QUEUE)
-    channel.basic_publish(exchange='', routing_key=RABBITMQ_QUEUE, body=json.dumps({"file_url": "https://storage.googleapis.com/fernunihagen-ss2025-caas/data/iris_without_class.csv"}))
+    channel.basic_publish(exchange='', routing_key=RABBITMQ_QUEUE, body=json.dumps({"file_url": "https://fuhcaas.blob.core.windows.net/caas/iris_without_class.csv"}))
     connection.close()
     return {"message": "Message sent to RabbitMQ queue"}

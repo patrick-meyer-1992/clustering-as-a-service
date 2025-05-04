@@ -5,16 +5,14 @@ import logging
 from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
 import pandas as pd
 
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 RABBITMQ_QUEUE = "caas"
 RABBITMQ_PORT = "5672"
 RABBITMQ_CREDENTIALS = pika.PlainCredentials(os.getenv("RABBITMQ_DEFAULT_USER"), os.getenv("RABBITMQ_DEFAULT_PASS"))
 
-OBJECT_STORAGE_BUCKET = "fernunihagen-ss2025-caas"
-
-def load_file_from_gcs(file_url):
+def load_file(file_url):
     try:
         df = pd.read_csv(file_url)
         return df
@@ -26,9 +24,9 @@ def cluster(message):
     # Perform computations with the message
     logging.debug(f"Processing message: {message}")
     # Example computation
-    df = load_file_from_gcs(message["file_url"])
+    df = load_file(message["file_url"])
     if df is None:
-        logging.error("Failed to load data from GCS.")
+        logging.error("Failed to load data from cloud storage.")
         return
     else:
         model = KMeans(n_clusters=3)
