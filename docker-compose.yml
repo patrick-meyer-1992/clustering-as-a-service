@@ -1,0 +1,46 @@
+services:
+  fastapi:
+    container_name: caas-fastapi
+    build: ./fastapi
+    ports:
+      - "7000:80"
+    env_file:
+      - ./message_broker/.env
+    environment:
+      - RABBITMQ_HOST=caas-rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: caas-rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+    env_file:
+      - ./message_broker/.env
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 2s
+
+  clustering:
+    container_name: caas-clustering
+    build: ./clustering
+    env_file:
+      - ./message_broker/.env
+    environment:
+      - RABBITMQ_HOST=caas-rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq-lib:
+    driver: local
+  rabbitmq-log:
+    driver: local
