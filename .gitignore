@@ -2,3 +2,4 @@
 .venv
 mongodb/data
 postgresql/data
+.vscode
