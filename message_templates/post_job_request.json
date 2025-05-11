@@ -1,5 +1,6 @@
 {
     "dataset_url": "string",
+    "columns": "list",
     "clustering_algorithm": "string",
     "parameters": {
         "custom_parameter_1 (example)": "any",

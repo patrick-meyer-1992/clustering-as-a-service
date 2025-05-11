@@ -1,5 +1,7 @@
 {
     "job_id": "UUID",
+    "dataset_url": "string",
+    "columns": "list",
     "created_timestamp": "timestamp",
     "started_timestamp": "timestamp",
     "finished_timestamp": "timestamp",
@@ -9,7 +11,7 @@
         "custom_parameter_2 (example)": "any",
         "usw.": ""
     },
-    "labels": [],
+    "labels": "list/array",
     "additional_results": {
         "custom_result_1 (example)": "any",
         "custom_result_2 (example)": "any",

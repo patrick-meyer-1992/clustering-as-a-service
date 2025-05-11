@@ -1,5 +1,7 @@
 {
     "job_id": "UUID",
+    "dataset_url": "string",
+    "columns": "list",
     "created_timestamp": "timestamp",
     "started_timestamp": "timestamp",
     "finished_timestamp": "timestamp",
