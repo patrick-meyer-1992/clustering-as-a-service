@@ -1,0 +1,9 @@
+{
+    "dataset_url": "string",
+    "clustering_algorithm": "string",
+    "parameters": {
+        "custom_parameter_1 (example)": "any",
+        "custom_parameter_2 (example)": "any",
+        "usw.": ""
+    }
+}

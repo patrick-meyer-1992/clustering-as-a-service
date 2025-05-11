@@ -1,0 +1,18 @@
+{
+    "job_id": "UUID",
+    "created_timestamp": "timestamp",
+    "started_timestamp": "timestamp",
+    "finished_timestamp": "timestamp",
+    "clustering_algorithm": "string",
+    "parameters": {
+        "custom_parameter_1 (example)": "any",
+        "custom_parameter_2 (example)": "any",
+        "usw.": ""
+    },
+    "labels": "list/array",
+    "additional_results": {
+        "custom_result_1 (example)": "any",
+        "custom_result_2 (example)": "any",
+        "usw": ""
+    }
+}
