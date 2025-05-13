@@ -8,5 +8,6 @@
         "custom_parameter_1 (example)": "any",
         "custom_parameter_2 (example)": "any",
         "usw.": "any"
-    }
+    },
+    "user_id": "string"
 }

@@ -1,4 +1,5 @@
 {
     "dataset_url": "string",
-    "file": "file_attachment"
+    "file": "file_attachment",
+    "user_id": "string"
 }

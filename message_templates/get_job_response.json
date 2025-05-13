@@ -9,5 +9,6 @@
         "custom_parameter_2 (example)": "any",
         "usw.": "any"
     },
-    "state": "string (queued, finished, failed, etc.)"
+    "state": "string (queued, finished, failed, etc.)",
+    "user_id": "string"
 }

@@ -16,5 +16,6 @@
         "custom_result_1 (example)": "any",
         "custom_result_2 (example)": "any",
         "usw": ""
-    }
+    },
+    "user_id": "string"
 }
