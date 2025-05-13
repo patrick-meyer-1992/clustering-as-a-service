@@ -1,7 +1,7 @@
 services:
   fastapi:
     container_name: caas-fastapi
-    build: ./fastapi
+    build: ./app
     ports:
       - "7000:80"
     env_file:
@@ -30,7 +30,8 @@ services:
 
   clustering:
     container_name: caas-clustering
-    build: ./clustering
+    build: ./app
+    command: celery -A tasks worker --loglevel=info
     env_file:
       - ./message_broker/.env
     environment:
@@ -49,6 +50,13 @@ services:
       - ./mongodb/init:/docker-entrypoint-initdb.d
     env_file:
       - ./mongodb/.env
+
+  redis:
+    image: redis
+    restart: unless-stopped
+    container_name: caas-redis
+    ports:
+      - '6379:6379'
 
 volumes:
   rabbitmq-lib:
