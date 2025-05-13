@@ -3,3 +3,4 @@
 mongodb/data
 postgresql/data
 .vscode
+**__pycache__**
