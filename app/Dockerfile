@@ -7,6 +7,6 @@ COPY ./requirements.txt /code/requirements.txt
 
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-# COPY ./code /code/ # Excluded while hot reloading is enabled in docker-compose
+COPY ./code /code/
 
 CMD ["fastapi", "run", "main.py", "--port", "8000"]
