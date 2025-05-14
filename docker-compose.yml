@@ -1,13 +1,17 @@
 services:
   fastapi:
     container_name: caas-fastapi
+    command: uvicorn main:app --host 0.0.0.0 --reload # For hot reload
+    volumes:
+      - ./app/code/:/code/ # For hot reload
     build: ./app
     ports:
-      - "7000:80"
+      - "7000:8000"
     env_file:
       - ./message_broker/.env
     environment:
       - RABBITMQ_HOST=caas-rabbitmq
+      - DEBUG=1 # For hot reload
 
   rabbitmq:
     image: rabbitmq:4-management

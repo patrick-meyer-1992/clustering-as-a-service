@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from tasks import run_clustering_task
 from celery_conn import celery
 import numpy as np
@@ -12,6 +12,10 @@ class ClusteringRequest(BaseModel):
     data: List[List[float]]
     algorithm: str  # "kmeans" or "dbscan"
     params: Dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
+
+# @app.get("/items/{item_id}")
+# def read_item(item_id: int, q: Union[str, None] = None):
+#     return {"item_id": item_id, "q": q}
 
 @app.post("/cluster/")
 def submit_clustering_job(req: ClusteringRequest):
