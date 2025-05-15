@@ -6,7 +6,7 @@ services:
       - ./app/code/:/code/ # For hot reload
     build: ./app
     ports:
-      - "7000:8000"
+      - "7001:8000"
     env_file:
       - ./message_broker/.env
       - ./object_storage/.env
