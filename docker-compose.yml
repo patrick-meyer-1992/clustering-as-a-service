@@ -9,6 +9,7 @@ services:
       - "7000:8000"
     env_file:
       - ./message_broker/.env
+      - ./object_storage/.env
     environment:
       - RABBITMQ_HOST=caas-rabbitmq
       - DEBUG=1 # For hot reload
@@ -62,10 +63,24 @@ services:
     ports:
       - '6379:6379'
 
+  minio:
+    image: minio/minio:latest
+    container_name: caas-minio
+    ports:
+      - "6000:9000"
+      - "6001:9001"
+    env_file:
+      - ./object_storage/.env
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+
 volumes:
   rabbitmq-lib:
     driver: local
   rabbitmq-log:
     driver: local
   mongodb-data:
+    driver: local
+  minio-data:
     driver: local

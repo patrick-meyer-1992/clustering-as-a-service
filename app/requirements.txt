@@ -7,3 +7,4 @@ celery[redis,rabbitmq]
 redis
 pymongo
 pika
+minio
