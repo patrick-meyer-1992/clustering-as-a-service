@@ -11,15 +11,21 @@ import io
 
 app = FastAPI()
 
-minio_access_key = os.getenv("MINIO_ROOT_USER")
-minio_secret_key = os.getenv("MINIO_ROOT_PASSWORD")
+# Bucket name
+BUCKET_NAME = "caas-data"
+
+MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
+MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
+MINIO_HOST = os.getenv("MINIO_HOST")
+MINIO_PORT = os.getenv("MINIO_PORT")
+
 
 # Configure your MinIO client
 minio_client = Minio(
-    endpoint="caas-minio:9000",  # Replace with your MinIO endpoint
-    access_key=minio_access_key,    # Replace with your MinIO access key
-    secret_key=minio_secret_key,    # Replace with your MinIO secret key
-    secure=False                # Set to True if using HTTPS
+    endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
+    access_key=MINIO_ACCESS_KEY,   
+    secret_key=MINIO_SECRET_KEY,    
+    secure=False                
 )
 
 class ClusteringRequest(BaseModel):
@@ -64,12 +70,11 @@ def get_clustering_result(task_id: str):
 
     # return {"status": res.state}
 
-# Bucket name
-bucket_name = "caas-data"
+
 
 # Ensure the bucket exists
-if not minio_client.bucket_exists(bucket_name):
-    minio_client.make_bucket(bucket_name)
+if not minio_client.bucket_exists(BUCKET_NAME):
+    minio_client.make_bucket(BUCKET_NAME)
 
 
 @app.put("/data/")
@@ -81,7 +86,7 @@ async def upload_file(file: UploadFile = File(...)):
 
         # Upload to MinIO
         minio_client.put_object(
-            bucket_name,
+            BUCKET_NAME,
             file.filename,
             data=file_stream,
             length=len(content),

@@ -12,7 +12,6 @@ services:
       - ./object_storage/.env
       - ./redis/.env
     environment:
-      - RABBITMQ_HOST=caas-rabbitmq
       - DEBUG=1 # For hot reload
 
   rabbitmq:
@@ -41,8 +40,6 @@ services:
     env_file:
       - ./message_broker/.env
       - ./redis/.env
-    environment:
-      - RABBITMQ_HOST=caas-rabbitmq
     depends_on:
       rabbitmq:
         condition: service_healthy
