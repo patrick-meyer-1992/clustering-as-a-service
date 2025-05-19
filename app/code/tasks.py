@@ -3,12 +3,12 @@ from clustering.kmeans import KMeansClustering
 from clustering.dbscan import DBSCANClustering
 
 @celery.task
-def run_clustering_task(data, algorithm, params):
-    if algorithm == "kmeans":
-        clustering = KMeansClustering(data, **params)
-    elif algorithm == "dbscan":
-        clustering = DBSCANClustering(data, **params)
+def run_clustering_job(dataset_url, columns, clustering_algorithm, user_id, params):
+    if clustering_algorithm == "kmeans":
+        clustering = KMeansClustering(dataset_url, **params)
+    elif clustering_algorithm == "dbscan":
+        clustering = DBSCANClustering(dataset_url, **params)
     else:
-        raise ValueError(f"Unsupported algorithm: {algorithm}")
+        raise ValueError(f"Unsupported algorithm: {clustering_algorithm}")
 
     return clustering.run()
