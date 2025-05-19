@@ -11,6 +11,7 @@ services:
       - ./message_broker/.env
       - ./object_storage/.env
       - ./redis/.env
+      - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
 
