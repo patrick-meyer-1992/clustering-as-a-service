@@ -1,17 +1,32 @@
 services:
   fastapi:
     container_name: caas-fastapi
-    command: uvicorn main:app --host 0.0.0.0 --reload # For hot reload
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --reload
     volumes:
-      - ./app/code/:/code/ # For hot reload
-    build: ./app
+      - ./app/code/:/code/
     ports:
-      - "7000:8000"
+      - "7001:8000"
     env_file:
       - ./message_broker/.env
     environment:
       - RABBITMQ_HOST=caas-rabbitmq
       - DEBUG=1 # For hot reload
+
+  streamlit:
+    container_name: caas-streamlit
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    command: streamlit run streamlit/app.py --server.port=8501 --server.enableCORS=false
+    volumes:
+      - ./streamlit:/code/streamlit
+    ports:
+      - "8501:8501"
+    #depends_on:
+    #  - fastapi
 
   rabbitmq:
     image: rabbitmq:4-management

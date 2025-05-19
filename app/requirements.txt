@@ -7,3 +7,6 @@ celery[redis,rabbitmq]
 redis
 pymongo
 pika
+streamlit
+requests
+plotly
