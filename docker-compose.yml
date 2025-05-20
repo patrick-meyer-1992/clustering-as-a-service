@@ -41,6 +41,7 @@ services:
     env_file:
       - ./message_broker/.env
       - ./redis/.env
+      - ./app/code/.env
     depends_on:
       rabbitmq:
         condition: service_healthy
