@@ -4,3 +4,4 @@ mongodb/data
 postgresql/data
 .vscode
 **__pycache__**
+.pytest_cache

@@ -11,6 +11,7 @@ services:
       - ./message_broker/.env
       - ./object_storage/.env
       - ./redis/.env
+      - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
 
@@ -40,6 +41,7 @@ services:
     env_file:
       - ./message_broker/.env
       - ./redis/.env
+      - ./app/.env
     depends_on:
       rabbitmq:
         condition: service_healthy
