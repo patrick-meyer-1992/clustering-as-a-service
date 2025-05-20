@@ -4,7 +4,7 @@
     "columns": "list",
     "created_timestamp": "timestamp",
     "clustering_algorithm": "string",
-    "parameters": {
+    "params": {
         "custom_parameter_1 (example)": "any",
         "custom_parameter_2 (example)": "any",
         "usw.": "any"

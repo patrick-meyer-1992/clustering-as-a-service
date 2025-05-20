@@ -1,13 +1,14 @@
 {
     "job_id": "UUID",
-    "dataset_url": "string",
+    "dataset_name": "string",
     "columns": "list",
     "created_timestamp": "timestamp",
     "clustering_algorithm": "string",
-    "parameters": {
+    "preprocess": "bool",
+    "user_id": "string",
+    "params": {
         "custom_parameter_1 (example)": "any",
         "custom_parameter_2 (example)": "any",
         "usw.": "any"
-    },
-    "user_id": "string"
+    }
 }

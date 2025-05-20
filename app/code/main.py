@@ -116,7 +116,7 @@ async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
         return StreamingResponse(
             minio_response,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; dataset_name={dataset_name}"},
+            headers={"Content-Disposition": f"attachment; filename={dataset_name}"},
             background=background_tasks
         )
 
@@ -171,7 +171,7 @@ async def put_dataset(file: UploadFile = File(...)):
         # Upload to MinIO
         minio_client.put_object(
             BUCKET_NAME,
-            file.dataset_name,
+            file.filename,
             data=file_stream,
             length=len(content),
             content_type=file.content_type
@@ -179,12 +179,12 @@ async def put_dataset(file: UploadFile = File(...)):
 
         data_collection = mongodb_database.get_collection("data")
         await data_collection.insert_one({
-            "dataset_name": file.dataset_name,
+            "dataset_name": file.filename,
             "content_type": file.content_type,
             "size": len(content),
         })
 
-        return {"dataset_name": file.dataset_name}
+        return {"dataset_name": file.filename}
 
     except S3Error as err:
         raise HTTPException(status_code=500, detail=f"MinIO error: {err}")
