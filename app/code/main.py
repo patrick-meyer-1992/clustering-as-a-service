@@ -41,18 +41,31 @@ MONGODB_PORT = os.getenv("MONGODB_PORT")
 mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
 mongodb_database = mongodb_client.get_database(MONGODB_DB)
 
-
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
 class JobRequest(BaseModel):
-    dataset_url: str
+    dataset_name: str
     columns: List[str]
-    clustering_algorithm: str  
+    clustering_algorithm: str
+    preprocess: bool = True
     user_id: str
     params: Dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
 
 class DatasetRequest(BaseModel):
-    dataset_url: str
+    dataset_name: str
+    user_id: str
+
+class ResultPutRequest(BaseModel):
+    job_id: str
+    dataset_name: str
+    columns: List[str]
+    created_timestamp: str
+    started_timestamp: str
+    finished_timestamp: str
+    clustering_algorithm: str
+    params: Dict[str, Any]
+    labels: List[int]
+    additional_results: Dict[str, Any]
     user_id: str
 
 # @app.get("/items/{item_id}")
@@ -69,36 +82,41 @@ def post_job(req: JobRequest):
     # Check if the user ID is valid
     # Check if the params are valid
 
+    created_timestamp = datetime.now(TIMEZONE).isoformat()
+
     job = run_clustering_job.delay(
-        req.dataset_url,
+        req.dataset_name,
         req.columns, 
+        created_timestamp,
         req.clustering_algorithm.lower(), 
+        req.preprocess,
         req.user_id,
-        req.params
+        **req.params,
         )
     
     response = {
         "job_id": job.id,
-        "dataset_url": req.dataset_url,
+        "dataset_name": req.dataset_name,
         "columns": req.columns,
-        "created_timestamp": datetime.now(TIMEZONE).isoformat(),
-        "clustering_algorithm": req.clustering_algorithm,
+        "created_timestamp": created_timestamp,
+        "clustering_algorithm": req.clustering_algorithm.lower(),
+        "preprocess": req.preprocess,
         "user_id": req.user_id,
         "params": req.params
     }
 
     return response
 
-@app.get("/dataset/{filename}", response_class=StreamingResponse)
-async def get_dataset(filename: str, background_tasks: BackgroundTasks):
+@app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
+async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
     try:
-        minio_response = minio_client.get_object(BUCKET_NAME, filename)
+        minio_response = minio_client.get_object(BUCKET_NAME, dataset_name)
         background_tasks.add_task(minio_response.close)
         background_tasks.add_task(minio_response.release_conn)
         return StreamingResponse(
             minio_response,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={"Content-Disposition": f"attachment; dataset_name={dataset_name}"},
             background=background_tasks
         )
 
@@ -153,7 +171,7 @@ async def put_dataset(file: UploadFile = File(...)):
         # Upload to MinIO
         minio_client.put_object(
             BUCKET_NAME,
-            file.filename,
+            file.dataset_name,
             data=file_stream,
             length=len(content),
             content_type=file.content_type
@@ -161,14 +179,20 @@ async def put_dataset(file: UploadFile = File(...)):
 
         data_collection = mongodb_database.get_collection("data")
         await data_collection.insert_one({
-            "filename": file.filename,
+            "dataset_name": file.dataset_name,
             "content_type": file.content_type,
             "size": len(content),
         })
 
-        return {"filename": file.filename}
+        return {"dataset_name": file.dataset_name}
 
     except S3Error as err:
         raise HTTPException(status_code=500, detail=f"MinIO error: {err}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+    
+@app.post("/result/")
+async def post_result(req: ResultPutRequest):
+    result_collection = mongodb_database.get_collection("results")
+    await result_collection.insert_one(req.model_dump())
+    return {"job_id": req.job_id}

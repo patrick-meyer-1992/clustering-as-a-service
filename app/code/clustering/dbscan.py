@@ -2,22 +2,18 @@ from sklearn.cluster import DBSCAN
 from .clustering_algorithm import ClusteringAlgorithm
 
 class DBSCANClustering(ClusteringAlgorithm):
-    def __init__(self, data, eps=0.5, min_samples=5, preprocess=True, **kwargs):
-        super().__init__(data, preprocess)
-        self.eps = eps
-        self.min_samples = min_samples
-        self.kwargs = kwargs
+    def __init__(self, dataset_name, columns, eps=0.5, min_samples=5, **params):
+        super().__init__(dataset_name, columns, **params)
+        self.name = "dbscan"
+        self.params["eps"] = eps
+        self.params["min_samples"] = min_samples
 
-    def run(self):
-        X = self._prepare_data()
-        self.model = DBSCAN(eps=self.eps, min_samples=self.min_samples, **self.kwargs)
-        self.labels = self.model.fit_predict(X)
-        # model_path, labels_path = self._save_results()
-        self._save_results()
-
-        return {
-            "job_id": self.job_id,
-            "algorithm": "dbscan",
-            "model_path": "model_path",
-            "labels_path": "labels_path"
-        }
+    def run(self, data):
+        model = DBSCAN(**self.params)
+        model.fit(data)
+        result = {}
+        result["labels"] = model.labels_.tolist()
+        result["core_sample_indices_"] = model.core_sample_indices_.tolist()
+        result["components_"] = model.components_.tolist() 
+        # TODO: Add more metrics if needed
+        return result
