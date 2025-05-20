@@ -8,3 +8,4 @@ redis
 pymongo
 pika
 minio
+requests
