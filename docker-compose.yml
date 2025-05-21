@@ -1,12 +1,14 @@
 services:
   fastapi:
     container_name: caas-fastapi
-    command: uvicorn main:app --host 0.0.0.0 --reload # For hot reload
-    volumes:
-      - ./app/code/:/code/ # For hot reload
-    build: ./app
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --reload
     ports:
       - "7001:8000"
+    volumes:
+      - ./app/code/:/code/ # For hot reload
     env_file:
       - ./message_broker/.env
       - ./object_storage/.env
@@ -14,6 +16,19 @@ services:
       - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
+
+  streamlit:
+    container_name: caas-streamlit
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    command: streamlit run /code/streamlit/app.py --server.port=8501 --server.enableCORS=false
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./streamlit:/code/streamlit
+    #depends_on:
+    #  - fastapi
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -36,7 +51,9 @@ services:
 
   clustering:
     container_name: caas-clustering
-    build: ./app
+    build:
+      context: ./app
+      dockerfile: Dockerfile
     command: celery -A tasks worker --loglevel=info
     env_file:
       - ./message_broker/.env

@@ -2,6 +2,6 @@
 .venv
 mongodb/data
 postgresql/data
+.DS_Store
 .vscode
 **__pycache__**
-.pytest_cache

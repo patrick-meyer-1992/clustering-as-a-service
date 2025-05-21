@@ -9,3 +9,5 @@ pymongo
 pika
 minio
 requests
+streamlit
+plotly
