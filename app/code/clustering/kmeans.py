@@ -3,22 +3,19 @@ from .clustering_algorithm import ClusteringAlgorithm
 from sklearn.datasets import load_iris
 
 class KMeansClustering(ClusteringAlgorithm):
-    def __init__(self, data, n_clusters=3, preprocess=True, **kwargs):
-        super().__init__(data, preprocess)
-        self.n_clusters = n_clusters
-        self.kwargs = kwargs
+    def __init__(self, dataset_name, columns, n_clusters=3, **params):
+        super().__init__(dataset_name, columns, **params)
+        self.name = "kmeans"
+        self.params["n_clusters"] = n_clusters
 
-    def run(self):
-        # X = load_iris().data
-        X = self._prepare_data()
-        self.model = KMeans(n_clusters=self.n_clusters, **self.kwargs)
-        self.labels = self.model.fit_predict(X)
-        # model_path, labels_path = self._save_results()
-        self._save_results()
+    def run(self, data):
+        model = KMeans(**self.params)
+        model.fit(data)
+        result = {}
+        result["labels"] = model.labels_.tolist()
+        result["centers"] = model.cluster_centers_.tolist()
+        result["inertia"] = model.inertia_
+        result["n_iter"] = model.n_iter_
+        # TODO: Add more metrics if needed
+        return result
 
-        return {
-            "job_id": self.job_id,
-            "algorithm": "kmeans",
-            "model_path": "model_path",
-            "labels_path": "labels_path"
-        }

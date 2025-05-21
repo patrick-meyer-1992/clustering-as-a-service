@@ -1,4 +1,3 @@
 {
-    "dataset_url": "string",
-    "user_id": "string"
+    "dataset_name": "string"
 }

@@ -2,10 +2,6 @@
 .venv
 mongodb/data
 postgresql/data
-<<<<<<< Updated upstream
+.DS_Store
 .vscode
 **__pycache__**
-=======
-.DS_Store
-.Übertrag
->>>>>>> Stashed changes
