@@ -11,6 +11,13 @@ import io
 from datetime import datetime
 import pytz
 from pymongo import AsyncMongoClient
+from fastapi import Query
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.express as px
+import uuid
+from fastapi import Form
+import json
 
 app = FastAPI()
 
@@ -126,10 +133,58 @@ async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 
-
+# TODO: cluster ergebnis anzeigen, Parameter für anzeige: Plot Tabelle Roh - dafür zuerst im frontend entgegennehmen
 @app.get("/cluster/{task_id}")
-def get_clustering_result(task_id: str):
-    pass
+async def get_clustering_result(
+    task_id: str,
+    presentation: str = Query("table", enum=["table", "raw", "graph"])
+):
+    result_collection = mongodb_database.get_collection("results")
+    result = await result_collection.find_one({"job_id": task_id})
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Result not found")
+
+    additional = result.get("additional_results", {})
+    labels = result.get("labels")
+    X = additional.get("X")
+    columns = additional.get("columns")
+
+    # table presentation
+    if presentation == "table":
+        if X is not None and columns is not None:
+            df = []
+            for row, label in zip(X, labels):
+                row_dict = {col: val for col, val in zip(columns, row)}
+                row_dict["Cluster"] = label
+                df.append(row_dict)
+            return {"data": df, "columns": columns + ["Cluster"]}
+        else:
+            return {"labels": labels}
+
+    # raw presentation
+    if presentation == "raw":
+        return labels
+
+    # graph presentation
+    if presentation == "graph":
+        if X is None or labels is None or len(X) == 0 or len(labels) == 0:
+            raise HTTPException(status_code=400, detail="No data for plotting")
+        import plotly.express as px
+        import numpy as np
+        X_np = np.array(X)
+        labels_np = np.array(labels)
+        if X_np.shape[1] < 2:
+            raise HTTPException(status_code=400, detail="Data is not 2D")
+        fig = px.scatter(
+            x=X_np[:, 0],
+            y=X_np[:, 1],
+            color=labels_np.astype(str),
+            title=f"Clustering: {result.get('clustering_algorithm')}"
+        )
+        return fig.to_dict()
+
+    raise HTTPException(status_code=400, detail="Invalid presentation type")
     # res = celery.AsyncResult(task_id)
 
     # if res.state == "PENDING":
@@ -157,11 +212,16 @@ def get_clustering_result(task_id: str):
 
 
 @app.put("/dataset/")
-async def put_dataset(file: UploadFile = File(...)):
-    # TODO:
-    # Check if the file is a valid CSV 
-    # Check if file already exists in MinIO
-    # Check if the columns are valid
+async def put_dataset(
+    file: UploadFile = File(...),
+    columns: List[str] = Form(...),
+    clustering_algorithm: str = Form(...),
+    preprocess: bool = Form(True),
+    user_id: str = Form(...),
+    params: str = Form("{}")
+):
+
+    # After data upload, the file is stored in MinIO and a clustering job is started.
 
     try:
         # Read file content
@@ -184,7 +244,29 @@ async def put_dataset(file: UploadFile = File(...)):
             "size": len(content),
         })
 
-        return {"dataset_name": file.filename}
+        # auto - starting Clustering-Job
+        created_timestamp = datetime.now(TIMEZONE).isoformat()
+        params_dict = json.loads(params) if isinstance(params, str) else params
+
+        job = run_clustering_job.delay(
+            file.filename,
+            columns,
+            created_timestamp,
+            clustering_algorithm.lower(),
+            preprocess,
+            user_id,
+            **params_dict
+        )
+
+        return {
+            "dataset_name": file.filename,
+            "job_id": job.id,
+            "columns": columns,
+            "clustering_algorithm": clustering_algorithm,
+            "preprocess": preprocess,
+            "user_id": user_id,
+            "params": params_dict
+        }
 
     except S3Error as err:
         raise HTTPException(status_code=500, detail=f"MinIO error: {err}")

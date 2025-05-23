@@ -4,4 +4,5 @@ mongodb/data
 postgresql/data
 .DS_Store
 .vscode
+*.csv
 **__pycache__**
