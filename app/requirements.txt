@@ -11,3 +11,5 @@ minio
 requests
 streamlit
 plotly
+matplotlib
+uvicorn

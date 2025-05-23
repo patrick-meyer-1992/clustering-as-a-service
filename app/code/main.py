@@ -11,6 +11,10 @@ import io
 from datetime import datetime
 import pytz
 from pymongo import AsyncMongoClient
+from fastapi import Query
+import matplotlib.pyplot as plt
+import numpy as np
+import plotly.express as px
 
 app = FastAPI()
 
@@ -126,10 +130,47 @@ async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 
-
+# TODO: cluster ergebnis anzeigen, Parameter für anzeige: Plot Tabelle Roh - dafür zuerst im frontend entgegennehmen
 @app.get("/cluster/{task_id}")
-def get_clustering_result(task_id: str):
-    pass
+async def get_clustering_result(
+    task_id: str,
+    presentation: str = Query("table", enum=["table", "raw", "graph"])
+):
+    result_collection = mongodb_database.get_collection("results")
+    result = await result_collection.find_one({"job_id": task_id})
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Result not found")
+
+    # table presentation
+    if presentation == "table":
+        return {
+            "labels": result.get("labels"),
+            "params": result.get("params"),
+            "algorithm": result.get("clustering_algorithm"),
+            "additional_results": result.get("additional_results", {})
+        }
+
+    # raw presentation
+    if presentation == "raw":
+        return result.get("labels")
+
+    # graph presentation
+    if presentation == "graph":
+        labels = np.array(result.get("labels"))
+        additional = result.get("additional_results", {})
+        X = np.array(additional.get("X"))
+        if X is None or X.shape[1] < 2:
+            raise HTTPException(status_code=400, detail="No 2D data for plotting")
+        fig = px.scatter(
+            x=X[:, 0],
+            y=X[:, 1],
+            color=labels.astype(str),
+            title=f"Clustering: {result.get('clustering_algorithm')}"
+        )
+        return fig.to_dict()
+
+    raise HTTPException(status_code=400, detail="Invalid presentation type")
     # res = celery.AsyncResult(task_id)
 
     # if res.state == "PENDING":
