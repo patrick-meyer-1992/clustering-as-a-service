@@ -15,6 +15,7 @@ from fastapi import Query
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
+import uuid
 
 app = FastAPI()
 
@@ -142,30 +143,41 @@ async def get_clustering_result(
     if not result:
         raise HTTPException(status_code=404, detail="Result not found")
 
+    additional = result.get("additional_results", {})
+    labels = result.get("labels")
+    X = additional.get("X")
+    columns = additional.get("columns")
+
     # table presentation
     if presentation == "table":
-        return {
-            "labels": result.get("labels"),
-            "params": result.get("params"),
-            "algorithm": result.get("clustering_algorithm"),
-            "additional_results": result.get("additional_results", {})
-        }
+        if X is not None and columns is not None:
+            df = []
+            for row, label in zip(X, labels):
+                row_dict = {col: val for col, val in zip(columns, row)}
+                row_dict["Cluster"] = label
+                df.append(row_dict)
+            return {"data": df, "columns": columns + ["Cluster"]}
+        else:
+            return {"labels": labels}
 
     # raw presentation
     if presentation == "raw":
-        return result.get("labels")
+        return labels
 
     # graph presentation
     if presentation == "graph":
-        labels = np.array(result.get("labels"))
-        additional = result.get("additional_results", {})
-        X = np.array(additional.get("X"))
-        if X is None or X.shape[1] < 2:
-            raise HTTPException(status_code=400, detail="No 2D data for plotting")
+        if X is None or labels is None or len(X) == 0 or len(labels) == 0:
+            raise HTTPException(status_code=400, detail="No data for plotting")
+        import plotly.express as px
+        import numpy as np
+        X_np = np.array(X)
+        labels_np = np.array(labels)
+        if X_np.shape[1] < 2:
+            raise HTTPException(status_code=400, detail="Data is not 2D")
         fig = px.scatter(
-            x=X[:, 0],
-            y=X[:, 1],
-            color=labels.astype(str),
+            x=X_np[:, 0],
+            y=X_np[:, 1],
+            color=labels_np.astype(str),
             title=f"Clustering: {result.get('clustering_algorithm')}"
         )
         return fig.to_dict()
@@ -199,11 +211,6 @@ async def get_clustering_result(
 
 @app.put("/dataset/")
 async def put_dataset(file: UploadFile = File(...)):
-    # TODO:
-    # Check if the file is a valid CSV 
-    # Check if file already exists in MinIO
-    # Check if the columns are valid
-
     try:
         # Read file content
         content = await file.read()
@@ -225,7 +232,9 @@ async def put_dataset(file: UploadFile = File(...)):
             "size": len(content),
         })
 
-        return {"dataset_name": file.filename}
+        # Generiere eine neue Job-ID
+        job_id = str(uuid.uuid4())
+        return {"dataset_name": file.filename, "job_id": job_id}
 
     except S3Error as err:
         raise HTTPException(status_code=500, detail=f"MinIO error: {err}")

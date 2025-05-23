@@ -13,3 +13,4 @@ streamlit
 plotly
 matplotlib
 uvicorn
+plotly-express
