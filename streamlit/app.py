@@ -24,7 +24,10 @@ if uploaded_file:
     # read column names
     columns = list(df.columns)
     clustering_algorithm = st.selectbox("Clustering-Algorithmus", ["kmeans", "dbscan"])
+
+    # Preprocessing Checkbox for data preprocessing (e.g. scaling, normalization)
     preprocess = st.checkbox("Preprocessing", value=True)
+    
     user_id = st.text_input("User-ID", value="testuser")
     params = {}
 
