@@ -1,8 +1,7 @@
 from sklearn.cluster import KMeans
-from .clustering_algorithm import ClusteringAlgorithm
-from sklearn.datasets import load_iris
+from .base_clustering import BaseClustering
 
-class KMeansClustering(ClusteringAlgorithm):
+class KMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "kmeans"

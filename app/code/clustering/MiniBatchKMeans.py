@@ -1,7 +1,7 @@
 from sklearn.cluster import MiniBatchKMeans
-from .clustering_algorithm import ClusteringAlgorithm
+from .base_clustering import BaseClustering
 
-class MiniBatchKMeansClustering(ClusteringAlgorithm):
+class MiniBatchKMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, batch_size=100, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "minibatch_kmeans"

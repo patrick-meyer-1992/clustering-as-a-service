@@ -1,7 +1,7 @@
 from sklearn.cluster import Birch
-from .clustering_algorithm import ClusteringAlgorithm
+from .base_clustering import BaseClustering
 
-class BIRCHClustering(ClusteringAlgorithm):
+class BIRCHClustering(BaseClustering):
     def __init__(self, dataset_name, columns, threshold=0.5, n_clusters=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "birch"

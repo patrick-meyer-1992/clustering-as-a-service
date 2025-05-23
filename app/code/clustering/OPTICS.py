@@ -1,7 +1,7 @@
 from sklearn.cluster import OPTICS
-from .clustering_algorithm import ClusteringAlgorithm
+from .base_clustering import BaseClustering
 
-class OPTICSClustering(ClusteringAlgorithm):
+class OPTICSClustering(BaseClustering):
     def __init__(self, dataset_name, columns, min_samples=5, xi=0.05, min_cluster_size=None, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "optics"

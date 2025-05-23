@@ -1,7 +1,7 @@
 from sklearn.cluster import AffinityPropagation
-from .clustering_algorithm import ClusteringAlgorithm
+from .base_clustering import BaseClustering
 
-class AffinityPropagationClustering(ClusteringAlgorithm):
+class AffinityPropagationClustering(BaseClustering):
     def __init__(self, dataset_name, columns, damping=0.5, preference=None, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "affinity_propagation"

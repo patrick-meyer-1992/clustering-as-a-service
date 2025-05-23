@@ -14,7 +14,7 @@ fastapi_host = os.getenv('FASTPI_HOST')
 fastapi_port = os.getenv('FASTAPI_PORT')
 fastapi_protocol = os.getenv('FASTAPI_PROTOCOL')
 
-class ClusteringAlgorithm(ABC):
+class BaseClustering(ABC):
     def __init__(self, dataset_name, columns, **params):
         self.params = params
         self.dataset_name = dataset_name
