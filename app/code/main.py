@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
 import uuid
+from fastapi import Form
+import json
 
 app = FastAPI()
 
@@ -210,7 +212,17 @@ async def get_clustering_result(
 
 
 @app.put("/dataset/")
-async def put_dataset(file: UploadFile = File(...)):
+async def put_dataset(
+    file: UploadFile = File(...),
+    columns: List[str] = Form(...),
+    clustering_algorithm: str = Form(...),
+    preprocess: bool = Form(True),
+    user_id: str = Form(...),
+    params: str = Form("{}")
+):
+
+    # After data upload, the file is stored in MinIO and a clustering job is started.
+
     try:
         # Read file content
         content = await file.read()
@@ -232,9 +244,29 @@ async def put_dataset(file: UploadFile = File(...)):
             "size": len(content),
         })
 
-        # Generiere eine neue Job-ID
-        job_id = str(uuid.uuid4())
-        return {"dataset_name": file.filename, "job_id": job_id}
+        # auto - starting Clustering-Job
+        created_timestamp = datetime.now(TIMEZONE).isoformat()
+        params_dict = json.loads(params) if isinstance(params, str) else params
+
+        job = run_clustering_job.delay(
+            file.filename,
+            columns,
+            created_timestamp,
+            clustering_algorithm.lower(),
+            preprocess,
+            user_id,
+            **params_dict
+        )
+
+        return {
+            "dataset_name": file.filename,
+            "job_id": job.id,
+            "columns": columns,
+            "clustering_algorithm": clustering_algorithm,
+            "preprocess": preprocess,
+            "user_id": user_id,
+            "params": params_dict
+        }
 
     except S3Error as err:
         raise HTTPException(status_code=500, detail=f"MinIO error: {err}")

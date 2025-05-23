@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import plotly.express as px
 import numpy as np
+import json
 
 FASTAPI_URL = "http://caas-fastapi:8000"
 
@@ -20,19 +21,32 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.write("Vorschau deiner Daten:", df.head())
 
-    # Start Clustering
+    # read column names
+    columns = list(df.columns)
+    clustering_algorithm = st.selectbox("Clustering-Algorithmus", ["kmeans", "dbscan"])
+    preprocess = st.checkbox("Preprocessing", value=True)
+    user_id = st.text_input("User-ID", value="testuser")
+    params = {}
+
     if st.button("Clustering starten"):
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
+        data = {
+            "columns": json.dumps(columns),
+            "clustering_algorithm": clustering_algorithm,
+            "preprocess": str(preprocess),
+            "user_id": user_id,
+            "params": json.dumps(params)
+        }
         try:
-            res = requests.put(f"{FASTAPI_URL}/dataset/", files=files)
+            res = requests.put(f"{FASTAPI_URL}/dataset/", files=files, data=data)
             if res.status_code == 200:
                 response = res.json()
                 st.session_state["job_id"] = response.get("job_id", "")
-                st.success(f"Upload erfolgreich! Job-ID: {st.session_state['job_id']}")
+                st.success(f"Upload & Clustering gestartet! Job-ID: {st.session_state['job_id']}")
             else:
-                st.error(f"Fehler beim Upload: {res.text}")
+                st.error(f"Fehler beim Upload/Jobstart: {res.text}")
         except Exception as e:
-            st.error(f"Fehler beim Upload: {e}")
+            st.error(f"Fehler beim Upload/Jobstart: {e}")
 
 
 # Presentation Section
@@ -45,7 +59,7 @@ presentation = st.selectbox(
     "Wie sollen Ergebnisse präsentiert werden?",
     ["Tabelle", "Rohdaten", "Graph"]
 )
-st.write("\n Hinweis: derzeit muss die JobID zuerst noch manuell in Swagger als Job gepostet werden. Es wird zwar eine neue JobID erzeugt, aber es wird noch kein Clustering Job gestartet und kein Ergebnis in results gespeichert")  # Debug
+
 if st.button("Ergebnis anzeigen") and input_job_id:
     
     mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
