@@ -13,12 +13,25 @@ class OPTICSClustering(BaseClustering):
     def run(self, data):
         model = OPTICS(**self.params)
         model.fit(data)
-        result = {}
-        result["labels"] = model.labels_.tolist()
-        result["reachability_"] = model.reachability_.tolist()
-        result["core_distances_"] = model.core_distances_.tolist()
-        result["ordering_"] = model.ordering_.tolist()
+
+        import collections
+        labels = model.labels_
+        cluster_sizes = collections.Counter(labels)
+        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        n_noise = list(labels).count(-1)
+
+        result = {
+            "labels": labels.tolist(),
+            "reachability_": model.reachability_.tolist(),
+            "core_distances_": model.core_distances_.tolist(),
+            "ordering_": model.ordering_.tolist(),
+            "n_clusters_": n_clusters,
+            "n_noise_": n_noise,
+            "cluster_sizes": dict(cluster_sizes)
+        }
+
         return result
+
 
 
 

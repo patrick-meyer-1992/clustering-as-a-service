@@ -11,9 +11,15 @@ class DBSCANClustering(BaseClustering):
     def run(self, data):
         model = DBSCAN(**self.params)
         model.fit(data)
-        result = {}
-        result["labels"] = model.labels_.tolist()
-        result["core_sample_indices_"] = model.core_sample_indices_.tolist()
-        result["components_"] = model.components_.tolist() 
-        # TODO: Add more metrics if needed
+
+        labels = model.labels_
+        result = {
+            "labels": labels.tolist(),
+            "core_sample_indices_": model.core_sample_indices_.tolist(),
+            "components_": model.components_.tolist(),
+            "n_clusters_": len(set(labels)) - (1 if -1 in labels else 0),
+            "n_noise_": list(labels).count(-1)
+        }
+
         return result
+

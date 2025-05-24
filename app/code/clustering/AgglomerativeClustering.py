@@ -12,9 +12,18 @@ class AgglomerativeClustering(BaseClustering):
     def run(self, data):
         model = SklearnAgglomerativeClustering(**self.params)
         labels = model.fit_predict(data)
-        result = {}
-        result["labels"] = labels.tolist()
+
+        import collections
+        cluster_sizes = collections.Counter(labels)
+
+        result = {
+            "labels": labels.tolist(),
+            "n_clusters_": len(set(labels)),
+            "cluster_sizes": dict(cluster_sizes)
+        }
+
         return result
+
 
 
 

@@ -12,10 +12,19 @@ class AffinityPropagationClustering(BaseClustering):
     def run(self, data):
         model = AffinityPropagation(**self.params)
         model.fit(data)
-        result = {}
-        result["labels"] = model.labels_.tolist()
-        result["cluster_centers_indices_"] = model.cluster_centers_indices_.tolist()
-        result["cluster_centers_"] = model.cluster_centers_.tolist()
-        result["n_iter_"] = model.n_iter_  # Kaç iterasyonda bitti
+
+        import collections
+        cluster_sizes = collections.Counter(model.labels_)
+
+        result = {
+            "labels": model.labels_.tolist(),
+            "cluster_centers_indices_": model.cluster_centers_indices_.tolist(),
+            "cluster_centers_": model.cluster_centers_.tolist(),
+            "n_iter_": model.n_iter_,
+            "n_clusters_": len(model.cluster_centers_indices_),
+            "cluster_sizes": dict(cluster_sizes)
+        }
+
         return result
+
 

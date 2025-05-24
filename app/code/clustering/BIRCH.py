@@ -11,11 +11,21 @@ class BIRCHClustering(BaseClustering):
     def run(self, data):
         model = Birch(**self.params)
         model.fit(data)
-        result = {}
-        result["labels"] = model.labels_.tolist()
-        result["subcluster_centers_"] = model.subcluster_centers_.tolist()
-        result["n_subclusters_"] = model.subcluster_centers_.shape[0]
+
+        import collections
+        labels = model.labels_
+        cluster_sizes = collections.Counter(labels)
+
+        result = {
+            "labels": labels.tolist(),
+            "subcluster_centers_": model.subcluster_centers_.tolist(),
+            "n_subclusters_": model.subcluster_centers_.shape[0],
+            "n_clusters_": len(set(labels)),
+            "cluster_sizes": dict(cluster_sizes)
+        }
+
         return result
+
 
 
 

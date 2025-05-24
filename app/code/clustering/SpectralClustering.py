@@ -9,11 +9,20 @@ class SpectralClustering(BaseClustering):
         self.params["affinity"] = affinity
 
     def run(self, data):
-        model = SpectralClustering(**self.params)
-        labels = model.fit_predict(data)
-        result = {}
-        result["labels"] = labels.tolist()
-        return result
+    model = SpectralClustering(**self.params)
+    labels = model.fit_predict(data)
+
+    import collections
+    cluster_sizes = collections.Counter(labels)
+
+    result = {
+        "labels": labels.tolist(),
+        "n_clusters_": len(set(labels)),
+        "cluster_sizes": dict(cluster_sizes)
+    }
+
+    return result
+
 
 
 

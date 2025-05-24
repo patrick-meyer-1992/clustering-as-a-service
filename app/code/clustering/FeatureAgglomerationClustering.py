@@ -19,10 +19,15 @@ class FeatureAgglomerationClustering(BaseClustering):
         model = FeatureAgglomeration(**self.params)
         model.fit(data)
         transformed = model.transform(data)
-        result = {}
-        result["transformed"] = transformed.tolist()
-        result["n_features_in_"] = model.n_features_in_
+
+        result = {
+            "transformed": transformed.tolist(),
+            "n_features_in_": model.n_features_in_,
+            "n_output_features_": transformed.shape[1]
+        }
+
         return result
+
 
 
 

@@ -10,11 +10,21 @@ class KMeansClustering(BaseClustering):
     def run(self, data):
         model = KMeans(**self.params)
         model.fit(data)
-        result = {}
-        result["labels"] = model.labels_.tolist()
-        result["centers"] = model.cluster_centers_.tolist()
-        result["inertia"] = model.inertia_
-        result["n_iter"] = model.n_iter_
-        # TODO: Add more metrics if needed
+
+        labels = model.labels_
+
+        import collections
+        cluster_sizes = collections.Counter(labels)
+
+        result = {
+            "labels": labels.tolist(),
+            "centers": model.cluster_centers_.tolist(),
+            "inertia": model.inertia_,
+            "n_iter": model.n_iter_,
+            "n_clusters_": len(set(labels)),
+            "cluster_sizes": dict(cluster_sizes)
+        }
+
         return result
+
 

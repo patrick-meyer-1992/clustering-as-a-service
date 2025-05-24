@@ -11,11 +11,23 @@ class SpectralCoclustering(BaseClustering):
         model = SpectralCoclustering(**self.params)
         model.fit(data)
 
-        result = {}
-        result["rows_"] = [mask.tolist() for mask in model.rows_]
-        result["columns_"] = [mask.tolist() for mask in model.columns_]
-        result["shape"] = model.shape
+        rows = model.rows_
+        cols = model.columns_
+
+        cocluster_sizes = [
+            int(r.sum()) * int(c.sum()) for r, c in zip(rows, cols)
+        ]
+
+        result = {
+            "rows_": [r.tolist() for r in rows],
+            "columns_": [c.tolist() for c in cols],
+            "shape": model.shape,
+            "n_coclusters_": len(rows),
+            "cocluster_sizes": cocluster_sizes
+        }
+
         return result
+
 
 
 
