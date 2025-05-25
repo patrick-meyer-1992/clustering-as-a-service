@@ -39,9 +39,16 @@ class BaseClustering(ABC):
         """Run the clustering algorithm and return result metadata."""
         pass
 
-    def save_results(self, result, job_id, created_timestamp, started_timestamp, user_id):
+    def save_results(self, result, job_id, created_timestamp, started_timestamp, user_id, original_data=None):
         labels = result.pop("labels")
-        return requests.post(
+
+        # Add original data and column names if provided
+        if original_data is not None:
+            result["X"] = original_data.tolist()
+            result["columns"] = self.columns
+
+        # Send results to FastAPI backend
+        response = requests.post(
             f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/",
             json={
                 "job_id": job_id,
@@ -57,5 +64,7 @@ class BaseClustering(ABC):
                 "user_id": user_id
             }
         )
+        return response
+
 
 
