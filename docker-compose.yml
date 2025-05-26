@@ -4,7 +4,7 @@ services:
     build:
       context: ./app
       dockerfile: fastapi.Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --reload
+    command: uvicorn fastapi_main:app --host 0.0.0.0 --reload
     ports:
       - "7001:8000"
     volumes:
@@ -20,8 +20,8 @@ services:
   streamlit:
     container_name: caas-streamlit
     build:
-      context: ./streamlit
-      dockerfile: Dockerfile
+      context: ./app
+      dockerfile: streamlit.Dockerfile
     # command: streamlit run /code/streamlit/app.py --server.port=8501 --server.enableCORS=false
     ports:
       - "8501:8501"
