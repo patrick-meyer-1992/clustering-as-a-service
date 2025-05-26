@@ -1,5 +1,6 @@
 from sklearn.cluster import MeanShift
 from .base_clustering import BaseClustering
+import collections
 
 class MeanShiftClustering(BaseClustering):
     def __init__(self, dataset_name, columns, bandwidth=None, **params):
@@ -12,7 +13,6 @@ class MeanShiftClustering(BaseClustering):
         model = MeanShift(**self.params)
         model.fit(data)
 
-        import collections
         cluster_sizes = collections.Counter(model.labels_)
 
         result = {

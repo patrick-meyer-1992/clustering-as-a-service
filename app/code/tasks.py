@@ -12,7 +12,7 @@ from clustering.agglomerative import AgglomerativeClustering
 from clustering.minibatchkmeans import MiniBatchKMeansClustering
 from clustering.bisectingkmeans import BisectingKMeansClustering
 from clustering.birch import BIRCHClustering
-from clustering.spectral import SpectralClustering
+from clustering.spectral import SpectralClusteringClustering
 from clustering.featureagglomeration import FeatureAgglomerationClustering
 from clustering.spectralbiclustering import SpectralBiclusteringClustering
 from clustering.spectralcoclustering import SpectralCoclusteringClustering
@@ -30,7 +30,7 @@ ALGORITHM_MAP = {
     "minibatchkmeans": MiniBatchKMeansClustering,
     "bisectingkmeans": BisectingKMeansClustering,
     "birch": BIRCHClustering,
-    "spectral": SpectralClustering,
+    "spectral": SpectralClusteringClustering,
     "featureagglomeration": FeatureAgglomerationClustering,
     "spectralbiclustering": SpectralBiclusteringClustering,
     "spectralcoclustering": SpectralCoclusteringClustering,

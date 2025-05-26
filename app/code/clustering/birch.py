@@ -1,5 +1,6 @@
 from sklearn.cluster import Birch
 from .base_clustering import BaseClustering
+import collections
 
 class BIRCHClustering(BaseClustering):
     def __init__(self, dataset_name, columns, threshold=0.5, n_clusters=3, **params):
@@ -12,7 +13,6 @@ class BIRCHClustering(BaseClustering):
         model = Birch(**self.params)
         model.fit(data)
 
-        import collections
         labels = model.labels_
         cluster_sizes = collections.Counter(labels)
 

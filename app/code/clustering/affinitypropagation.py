@@ -1,5 +1,7 @@
 from sklearn.cluster import AffinityPropagation
 from .base_clustering import BaseClustering
+import collections
+
 
 class AffinityPropagationClustering(BaseClustering):
     def __init__(self, dataset_name, columns, damping=0.5, preference=None, **params):
@@ -13,7 +15,6 @@ class AffinityPropagationClustering(BaseClustering):
         model = AffinityPropagation(**self.params)
         model.fit(data)
 
-        import collections
         cluster_sizes = collections.Counter(model.labels_)
 
         result = {

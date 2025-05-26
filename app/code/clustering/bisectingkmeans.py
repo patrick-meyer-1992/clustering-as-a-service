@@ -1,5 +1,6 @@
 from sklearn.cluster import BisectingKMeans
 from .base_clustering import BaseClustering
+import collections
 
 class BisectingKMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, **params):
@@ -11,7 +12,6 @@ class BisectingKMeansClustering(BaseClustering):
         model = BisectingKMeans(**self.params)
         model.fit(data)
 
-        import collections
         cluster_sizes = collections.Counter(model.labels_)
 
         result = {

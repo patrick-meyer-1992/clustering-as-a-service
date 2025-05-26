@@ -1,5 +1,7 @@
 from sklearn.cluster import KMeans
 from .base_clustering import BaseClustering
+import collections
+
 
 class KMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=3, **params):
@@ -13,7 +15,6 @@ class KMeansClustering(BaseClustering):
 
         labels = model.labels_
 
-        import collections
         cluster_sizes = collections.Counter(labels)
 
         result = {

@@ -1,6 +1,7 @@
 from sklearn.cluster import FeatureAgglomeration
 from sklearn.preprocessing import StandardScaler
 from .base_clustering import BaseClustering
+import collections
 
 class FeatureAgglomerationClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=5, **params):

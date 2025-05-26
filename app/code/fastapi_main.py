@@ -170,8 +170,6 @@ async def get_clustering_result(
     if presentation == "graph":
         if X is None or labels is None or len(X) == 0 or len(labels) == 0:
             raise HTTPException(status_code=400, detail="No data for plotting")
-        import plotly.express as px
-        import numpy as np
         X_np = np.array(X)
         labels_np = np.array(labels)
         if X_np.shape[1] < 2:

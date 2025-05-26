@@ -1,5 +1,6 @@
 from sklearn.cluster import OPTICS
 from .base_clustering import BaseClustering
+import collections
 
 class OPTICSClustering(BaseClustering):
     def __init__(self, dataset_name, columns, min_samples=5, xi=0.05, min_cluster_size=None, **params):
@@ -14,7 +15,6 @@ class OPTICSClustering(BaseClustering):
         model = OPTICS(**self.params)
         model.fit(data)
 
-        import collections
         labels = model.labels_
         cluster_sizes = collections.Counter(labels)
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)

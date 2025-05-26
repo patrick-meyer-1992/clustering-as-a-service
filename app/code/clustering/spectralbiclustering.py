@@ -1,7 +1,7 @@
 from sklearn.cluster import SpectralBiclustering
 from .base_clustering import BaseClustering
 
-class SpectralBiclustering(BaseClustering):
+class SpectralBiclusteringClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=(3, 3), **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "spectral_biclustering"

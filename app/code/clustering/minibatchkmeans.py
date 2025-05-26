@@ -1,5 +1,6 @@
 from sklearn.cluster import MiniBatchKMeans
 from .base_clustering import BaseClustering
+import collections
 
 class MiniBatchKMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, batch_size=100, **params):
@@ -12,7 +13,6 @@ class MiniBatchKMeansClustering(BaseClustering):
         model = MiniBatchKMeans(**self.params)
         model.fit(data)
 
-        import collections
         cluster_sizes = collections.Counter(model.labels_)
 
         result = {
@@ -24,7 +24,7 @@ class MiniBatchKMeansClustering(BaseClustering):
             "cluster_sizes": dict(cluster_sizes)
         }
 
-        return return
+        return result
 
 
 

@@ -4,6 +4,7 @@ import requests
 import plotly.express as px
 import numpy as np
 import json
+import plotly.graph_objects as go
 
 FASTAPI_URL = "http://caas-fastapi:8000"
 
@@ -83,7 +84,7 @@ if st.button("Ergebnis anzeigen") and input_job_id:
             elif pres == "raw":
                 st.write(np.array(data))
             elif pres == "graph":
-                import plotly.graph_objects as go
+                
                 fig = go.Figure(data)
                 if not fig.data:
                     st.warning("Keine Daten für Plot vorhanden.")

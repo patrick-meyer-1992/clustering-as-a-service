@@ -3,8 +3,8 @@ services:
     container_name: caas-fastapi
     build:
       context: ./app
-      dockerfile: Dockerfile
-    command: uvicorn main:app --host 0.0.0.0 --reload
+      dockerfile: fastapi.Dockerfile
+    command: uvicorn fastapi_main:app --host 0.0.0.0 --reload
     ports:
       - "7001:8000"
     volumes:
@@ -21,12 +21,12 @@ services:
     container_name: caas-streamlit
     build:
       context: ./app
-      dockerfile: Dockerfile
-    command: streamlit run /code/streamlit/app.py --server.port=8501 --server.enableCORS=false
+      dockerfile: streamlit.Dockerfile
+    # command: streamlit run /code/streamlit/app.py --server.port=8501 --server.enableCORS=false
     ports:
       - "8501:8501"
-    volumes:
-      - ./streamlit:/code/streamlit
+    # volumes:
+    #   - ./streamlit:/code/streamlit
     #depends_on:
     #  - fastapi
 
@@ -53,8 +53,7 @@ services:
     container_name: caas-clustering
     build:
       context: ./app
-      dockerfile: Dockerfile
-    command: celery -A tasks worker --loglevel=info
+      dockerfile: clustering.Dockerfile
     env_file:
       - ./message_broker/.env
       - ./redis/.env
