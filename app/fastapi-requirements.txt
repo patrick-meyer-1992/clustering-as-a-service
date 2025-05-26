@@ -7,4 +7,5 @@ pandas
 requests
 celery[redis,rabbitmq]
 plotly
+matplotlib
 
