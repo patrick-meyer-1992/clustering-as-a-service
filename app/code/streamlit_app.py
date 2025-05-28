@@ -59,22 +59,43 @@ if uploaded_file:
 
 # --- Dataset List Section ---
 st.subheader("Vorhandene Datensätze")
+st.write("")  # Kleinerer Abstand als mit st.markdown("---")
 dataset_list = get_dataset_list()
 if dataset_list:
-    import pandas as pd
-    # Display as table with select and delete buttons
-    for ds in dataset_list:
-        cols = st.columns([3, 1, 1])
-        cols[0].write(ds)
-        if cols[1].button("Auswählen", key=f"select_{ds}"):
-            st.session_state["dataset_name"] = ds
-            st.success(f"Datensatz ausgewählt: {ds}")
-        if cols[2].button("Löschen", key=f"delete_{ds}"):
-            if delete_dataset_backend(ds):
-                st.success(f"Datensatz gelöscht: {ds}")
-                st.rerun()
-            else:
-                st.error("Fehler beim Löschen!")
+    # Container für einheitliches Styling
+    with st.container():
+        # Header-Zeile
+        header_cols = st.columns([3, 2, 1, 1])
+        header_cols[0].markdown("**Datensatzbezeichnung**")
+        header_cols[1].markdown("**Benutzer**")
+        
+        # Trennlinie nach Header
+        st.divider()
+        
+        # Für jeden Datensatz eine Zeile mit gleichmäßiger Aufteilung
+        for dataset in dataset_list:
+            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+            
+            # Dateiname und Benutzer in gleicher Zeile
+            col1.text(dataset['dataset_name'])
+            col2.text(dataset.get('user_id', 'unbekannt'))
+            
+            # Buttons mit einheitlichem Styling, ohne Umbruch
+            if col3.button("✅", key=f"select_{dataset['dataset_name']}", help="Auswählen"):
+                st.session_state["dataset_name"] = dataset['dataset_name']
+                st.success(f"Datensatz ausgewählt: {dataset['dataset_name']}")
+            
+            if col4.button("🗑️", key=f"delete_{dataset['dataset_name']}", help="Löschen"):
+                if delete_dataset_backend(dataset['dataset_name']):
+                    st.success(f"Datensatz gelöscht: {dataset['dataset_name']}")
+                    st.rerun()
+                else:
+                    st.error("Fehler beim Löschen!")
+            
+            # Trennlinie zwischen den Datensätzen
+            st.divider()
+else:
+    st.info("Keine Datensätze vorhanden")
 
 # --- Clustering Section ---
 if st.session_state["dataset_name"]:

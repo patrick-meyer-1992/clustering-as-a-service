@@ -359,12 +359,14 @@ async def start_clustering(
 @app.get("/datasets/")
 async def list_datasets():
     """
-    Returns a list of all uploaded datasets (filenames).
+    Returns a list of all uploaded datasets with their user IDs.
     """
     data_collection = mongodb_database.get_collection("data")
-    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=1000)
-    # Return only the dataset names as a list
-    return [d["dataset_name"] for d in datasets]
+    datasets = await data_collection.find(
+        {}, 
+        {"_id": 0, "dataset_name": 1, "user_id": 1}
+    ).to_list(length=1000)
+    return datasets  # Returns list of dicts with dataset_name and user_id
 
 @app.delete("/datasets/{dataset_name}")
 async def delete_dataset(dataset_name: str):
