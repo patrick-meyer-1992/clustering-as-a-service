@@ -18,6 +18,8 @@ import plotly.express as px
 import uuid
 from fastapi import Form
 import json
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -133,18 +135,22 @@ async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
 
 
-# TODO: cluster ergebnis anzeigen, Parameter für anzeige: Plot Tabelle Roh - dafür zuerst im frontend entgegennehmen
+# Get clustering result by task_id | Forwarding results to the frontend
 @app.get("/cluster/{task_id}")
 async def get_clustering_result(
     task_id: str,
     presentation: str = Query("table", enum=["table", "raw", "graph"])
 ):
+    
+    # get result from MongoDB
     result_collection = mongodb_database.get_collection("results")
     result = await result_collection.find_one({"job_id": task_id})
 
+    # Check if result exists
     if not result:
-        raise HTTPException(status_code=404, detail="Result not found")
+        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
 
+    # get metadata and additional results
     additional = result.get("additional_results", {})
     labels = result.get("labels")
     X = additional.get("X")
@@ -211,7 +217,7 @@ async def get_clustering_result(
 
 @app.put("/dataset/")
 async def put_dataset(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...), # TODO: streaming file
     columns: List[str] = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
@@ -242,10 +248,11 @@ async def put_dataset(
             "size": len(content),
         })
 
-        # auto - starting Clustering-Job
+        # start Clustering-Job and forward it to Celery
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         params_dict = json.loads(params) if isinstance(params, str) else params
 
+        # run_clustering_job is a Celery task that processes the clustering job, returning a job ID.
         job = run_clustering_job.delay(
             file.filename,
             columns,
@@ -258,7 +265,7 @@ async def put_dataset(
 
         return {
             "dataset_name": file.filename,
-            "job_id": job.id,
+            "job_id": job.id, # This is the Celery job ID
             "columns": columns,
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
@@ -276,3 +283,103 @@ async def post_result(req: ResultPutRequest):
     result_collection = mongodb_database.get_collection("results")
     await result_collection.insert_one(req.model_dump())
     return {"job_id": req.job_id}
+
+@app.put("/upload/")
+async def upload_dataset(
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+):
+    data_collection = mongodb_database.get_collection("data")
+    # Check if file with the same name already exists
+    exists = await data_collection.find_one({"dataset_name": file.filename})
+    if exists:
+        raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
+    try:
+        content = await file.read()
+        file_stream = io.BytesIO(content)
+
+        # Upload to MinIO
+        minio_client.put_object(
+            BUCKET_NAME,
+            file.filename,
+            data=file_stream,
+            length=len(content),
+            content_type=file.content_type
+        )
+
+        await data_collection.insert_one({
+            "dataset_name": file.filename,
+            "content_type": file.content_type,
+            "size": len(content),
+            "user_id": user_id
+        })
+
+        return {"dataset_name": file.filename}
+    except S3Error as err:
+        raise HTTPException(status_code=500, detail=f"MinIO error: {err}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+@app.post("/cluster/")
+async def start_clustering(
+    dataset_name: str = Form(...),
+    columns: str = Form(...),  # JSON-String
+    clustering_algorithm: str = Form(...),
+    preprocess: bool = Form(True),
+    user_id: str = Form(...),
+    params: str = Form("{}")
+):
+    try:
+        created_timestamp = datetime.now(TIMEZONE).isoformat()
+        columns_list = json.loads(columns) if isinstance(columns, str) else columns
+        params_dict = json.loads(params) if isinstance(params, str) else params
+
+        job = run_clustering_job.delay(
+            dataset_name,
+            columns_list,
+            created_timestamp,
+            clustering_algorithm.lower(),
+            preprocess,
+            user_id,
+            **params_dict
+        )
+
+        return {
+            "dataset_name": dataset_name,
+            "job_id": job.id,
+            "columns": columns_list,
+            "clustering_algorithm": clustering_algorithm,
+            "preprocess": preprocess,
+            "user_id": user_id,
+            "params": params_dict
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+@app.get("/datasets/")
+async def list_datasets():
+    """
+    Returns a list of all uploaded datasets with their user IDs.
+    """
+    data_collection = mongodb_database.get_collection("data")
+    datasets = await data_collection.find(
+        {}, 
+        {"_id": 0, "dataset_name": 1, "user_id": 1}
+    ).to_list(length=1000)
+    return datasets  # Returns list of dicts with dataset_name and user_id
+
+@app.delete("/datasets/{dataset_name}")
+async def delete_dataset(dataset_name: str):
+    """
+    Deletes a dataset from MongoDB and MinIO.
+    """
+    data_collection = mongodb_database.get_collection("data")
+    result = await data_collection.delete_one({"dataset_name": dataset_name})
+    try:
+        minio_client.remove_object(BUCKET_NAME, dataset_name)
+    except Exception:
+        pass  # Ignore if file does not exist in MinIO
+    if result.deleted_count == 1:
+        return {"detail": "Dataset deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="Dataset not found")
