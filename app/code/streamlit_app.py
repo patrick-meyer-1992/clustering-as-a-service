@@ -185,8 +185,6 @@ if st.session_state["dataset_name"]:
     params = {}
 
     if st.button("Clustering starten"):
-        st.info(f"Starte Clustering mit Algorithmus: {clustering_algorithm}")
-        
         data = {
             "dataset_name": st.session_state["dataset_name"],
             "columns": json.dumps(columns),
@@ -196,51 +194,27 @@ if st.session_state["dataset_name"]:
             "params": json.dumps(params)
         }
         
-        # Debug-Ausgabe der Daten
-        st.write("Gesendete Daten:", data)
-        
         try:
             res = requests.post(f"{FASTAPI_URL}/cluster/", data=data)
-            st.write("Response Status:", res.status_code)
-            st.write("Response Data:", res.json())
-            
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")
                 st.session_state["job_id"] = job_id
                 st.success(f"Clustering gestartet! Job-ID: {job_id}")
                 
-                # Warte und zeige Debug-Infos
-                st.info("Warte auf Ergebnisse...")
-                for i in range(5):
-                    time.sleep(2)
-                    
-                    # Debug Info abrufen
-                    debug_info = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
-                    if debug_info.status_code == 200:
-                        debug_data = debug_info.json()
-                        st.write(f"Debug Info (Check {i+1}):")
-                        st.json(debug_data)
-                    
-                    # Result Check
-                    result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}")
-                    st.write(f"Check {i+1}: Status {result_check.status_code}")
-                    
-                    if result_check.status_code == 200:
-                        st.success("Ergebnisse verfügbar!")
-                        break
+                # Warte kurz auf Ergebnisse
+                st.info("Verarbeite Daten...")
+                time.sleep(2)
+                
+                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}")
+                if result_check.status_code == 200:
+                    st.success("Clustering erfolgreich abgeschlossen!")
                 else:
-                    st.warning("Keine Ergebnisse nach 10 Sekunden.")
-                    if result_check.status_code != 200:
-                        st.error(result_check.text)
-                        # Zeige letzte Debug-Info
-                        st.error("Letzter Debug-Status:")
-                        if debug_info.status_code == 200:
-                            st.json(debug_info.json())
+                    st.error("Clustering konnte nicht erfolgreich durchgeführt werden.")
             else:
-                st.error(f"Fehler beim Clustering: {res.text}")
+                st.error("Fehler beim Starten des Clusterings")
         except Exception as e:
-            st.error(f"Fehler beim Clustering: {e}")
+            st.error(f"Fehler: {str(e)}")
 
 # Presentation Section
 # After asynchron clustering job is ended, the results get saved in mongodb. 

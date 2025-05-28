@@ -4,26 +4,29 @@ import collections
 
 class BisectingKMeansClustering(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, **params):
-        super().__init__(dataset_name, columns, **params)
-        self.name = "bisecting_kmeans"
+        super().__init__(dataset_name, columns)
+        self.name = "Bisecting KMeans"  # Exakt wie im Frontend
         self.params["n_clusters"] = n_clusters
+        self.params.update(params)
 
     def run(self, data):
-        model = BisectingKMeans(**self.params)
-        model.fit(data)
-
-        cluster_sizes = collections.Counter(model.labels_)
-
-        result = {
-            "labels": model.labels_.tolist(),
-            "cluster_centers_": model.cluster_centers_.tolist(),
-            "inertia": model.inertia_,
-            "n_iter_": model.n_iter_,
-            "n_clusters_": len(set(model.labels_)),
-            "cluster_sizes": dict(cluster_sizes)
-        }
-
-        return result
+        try:
+            print(f"Running BisectingKMeans with params: {self.params}")
+            model = BisectingKMeans(**self.params)
+            model.fit(data)
+            
+            result = {
+                "labels": model.labels_.tolist(),
+                "cluster_centers": model.cluster_centers_.tolist(),
+                "inertia": float(model.inertia_),
+                "n_iter": model.n_iter_.tolist()
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error in BisectingKMeans clustering: {str(e)}")
+            raise
 
 
 

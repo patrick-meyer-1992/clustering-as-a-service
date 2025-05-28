@@ -4,28 +4,29 @@ import collections
 
 
 class KMeansClustering(BaseClustering):
-    def __init__(self, dataset_name, columns, n_clusters=3, **params):
-        super().__init__(dataset_name, columns, **params)
-        self.name = "kmeans"
+    def __init__(self, dataset_name, columns, n_clusters=8, **params):
+        super().__init__(dataset_name, columns)
+        self.name = "KMeans"  # Exakt wie im Frontend
         self.params["n_clusters"] = n_clusters
+        self.params.update(params)  # Weitere Parameter hinzufügen
 
     def run(self, data):
-        model = KMeans(**self.params)
-        model.fit(data)
+        try:
+            print(f"Running KMeans with params: {self.params}")
+            model = KMeans(**self.params)
+            model.fit(data)
 
-        labels = model.labels_
+            result = {
+                "labels": model.labels_.tolist(),
+                "cluster_centers": model.cluster_centers_.tolist(),
+                "n_iter": model.n_iter_,
+                "inertia": float(model.inertia_)
+            }
 
-        cluster_sizes = collections.Counter(labels)
+            return result
 
-        result = {
-            "labels": labels.tolist(),
-            "centers": model.cluster_centers_.tolist(),
-            "inertia": model.inertia_,
-            "n_iter": model.n_iter_,
-            "n_clusters_": len(set(labels)),
-            "cluster_sizes": dict(cluster_sizes)
-        }
-
-        return result
+        except Exception as e:
+            print(f"Error in KMeans clustering: {str(e)}")
+            raise
 
 
