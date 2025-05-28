@@ -279,11 +279,50 @@ async def put_dataset(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
     
 @app.post("/result/")
-async def post_result(req: ResultPutRequest):
-    result_collection = mongodb_database.get_collection("results")
-    await result_collection.insert_one(req.model_dump())
-    return {"job_id": req.job_id}
+async def save_result(result: dict):
+    """
+    Save clustering results to MongoDB
+    """
+    try:
+        results_collection = mongodb_database.get_collection("results")
+        # Ensure job_id exists
+        if "job_id" not in result:
+            raise HTTPException(status_code=400, detail="job_id is required")
+            
+        # Check if result already exists
+        existing = await results_collection.find_one({"job_id": result["job_id"]})
+        if existing:
+            # Update existing result
+            await results_collection.update_one(
+                {"job_id": result["job_id"]},
+                {"$set": result}
+            )
+        else:
+            # Insert new result
+            await results_collection.insert_one(result)
+        
+        return {"status": "success", "job_id": result["job_id"]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving result: {str(e)}")
 
+@app.get("/cluster/{job_id}")
+async def get_clustering_result(job_id: str):
+    """
+    Retrieve clustering results from MongoDB
+    """
+    try:
+        results_collection = mongodb_database.get_collection("results")
+        result = await results_collection.find_one({"job_id": job_id})
+        
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Result not found for job_id: {job_id}")
+            
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving result: {str(e)}")
+    
 @app.put("/upload/")
 async def upload_dataset(
     file: UploadFile = File(...),
@@ -323,22 +362,29 @@ async def upload_dataset(
 @app.post("/cluster/")
 async def start_clustering(
     dataset_name: str = Form(...),
-    columns: str = Form(...),  # JSON-String
+    columns: str = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
     params: str = Form("{}")
 ):
     try:
+        # Modulname und Klassenname generieren
+        module_name = clustering_algorithm.lower().replace(' ', '')
+        class_name = f"{clustering_algorithm.replace(' ', '')}Clustering"
+        
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
         params_dict = json.loads(params) if isinstance(params, str) else params
 
+        print(f"Starting clustering job: module={module_name}, class={class_name}")
+        
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
             created_timestamp,
-            clustering_algorithm.lower(),
+            module_name,  # Hier den Modulnamen übergeben
+            class_name,   # Hier den Klassennamen übergeben
             preprocess,
             user_id,
             **params_dict
@@ -354,7 +400,7 @@ async def start_clustering(
             "params": params_dict
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}")
 
 @app.get("/datasets/")
 async def list_datasets():
@@ -366,7 +412,7 @@ async def list_datasets():
         {}, 
         {"_id": 0, "dataset_name": 1, "user_id": 1}
     ).to_list(length=1000)
-    return datasets  # Returns list of dicts with dataset_name and user_id
+    return datasets
 
 @app.delete("/datasets/{dataset_name}")
 async def delete_dataset(dataset_name: str):
@@ -383,3 +429,28 @@ async def delete_dataset(dataset_name: str):
         return {"detail": "Dataset deleted"}
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
+
+@app.get("/debug/job/{job_id}")
+async def debug_job(job_id: str):
+    """
+    Debug endpoint to check job status and results
+    """
+    try:
+        # Check Celery task
+        task = celery.AsyncResult(job_id)
+        task_info = {
+            "task_id": task.id,
+            "status": task.status,
+            "result": task.result if task.ready() else None
+        }
+        
+        # Check MongoDB
+        results_collection = mongodb_database.get_collection("results")
+        stored_result = await results_collection.find_one({"job_id": job_id})
+        
+        return {
+            "task_info": task_info,
+            "stored_result": stored_result is not None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")

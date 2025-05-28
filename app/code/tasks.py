@@ -1,6 +1,7 @@
 from celery_conn import celery
 from datetime import datetime
 import pytz
+import importlib
 
 # Import all clustering wrapper classes
 from clustering.kmeans import KMeansClustering
@@ -36,20 +37,40 @@ ALGORITHM_MAP = {
     "spectralcoclustering": SpectralCoclusteringClustering,
 }
 
-@celery.task(bind=True)
-def run_clustering_job(self, dataset_name, columns, created_timestamp, clustering_algorithm, preprocess, user_id, **params):
-    job_id = self.request.id
-    started_timestamp = datetime.now(TIMEZONE).isoformat()
-
-    algorithm_name = clustering_algorithm.lower()
-    if algorithm_name not in ALGORITHM_MAP:
-        raise ValueError(f"Unsupported algorithm: {algorithm_name}")
-
-    ClusteringClass = ALGORITHM_MAP[algorithm_name]
-    clustering = ClusteringClass(dataset_name, columns, **params)
-
-    data = clustering.load_data()
-    data = clustering.prepare_data(data, preprocess)
-    result = clustering.run(data)
-    clustering.save_results(result, job_id, created_timestamp, started_timestamp, user_id, original_data=data)
+@celery.task
+def run_clustering_job(dataset_name, columns, created_timestamp, module_name, class_name, preprocess, user_id, **params):
+    try:
+        print(f"Running clustering job for {dataset_name} with {class_name}")
+        
+        # Import clustering module
+        module = importlib.import_module(f"clustering.{module_name}")
+        clustering_class = getattr(module, class_name)
+        
+        # Create clustering instance
+        clustering = clustering_class(dataset_name, columns, **params)
+        
+        # Load and prepare data
+        data = clustering.load_data()
+        prepared_data = clustering.prepare_data(data, preprocess)
+        
+        # Run clustering
+        started_timestamp = datetime.now(TIMEZONE).isoformat()
+        result = clustering.run(prepared_data)
+        
+        # Save results using the task ID as job_id
+        task_id = run_clustering_job.request.id
+        clustering.save_results(
+            result,
+            task_id,  # Hier verwenden wir die Task ID als job_id
+            created_timestamp,
+            started_timestamp,
+            user_id,
+            prepared_data
+        )
+        
+        return {"status": "success", "job_id": task_id}
+        
+    except Exception as e:
+        print(f"Error in clustering job: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
