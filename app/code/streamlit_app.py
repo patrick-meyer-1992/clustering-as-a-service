@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
+import numpy as np
+import plotly.graph_objects as go
+import io
 
 FASTAPI_URL = "http://caas-fastapi:8000"
 
@@ -10,39 +13,118 @@ if "dataset_name" not in st.session_state:
 if "job_id" not in st.session_state:
     st.session_state["job_id"] = ""
 
+def get_dataset_list():
+    try:
+        resp = requests.get(f"{FASTAPI_URL}/datasets/")
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            return []
+    except Exception:
+        return []
+
+def delete_dataset_backend(dataset_name):
+    try:
+        resp = requests.delete(f"{FASTAPI_URL}/datasets/{dataset_name}")
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+# --- Upload Section ---
 uploaded_file = st.file_uploader("CSV-Datei hochladen", type=["csv"])
+
+# Username für alle Aktionen
+user_id = st.text_input("User-ID", value="testuser")
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.write("Vorschau deiner Daten:", df.head())
-    user_id = st.text_input("User-ID", value="testuser")
+    
     if st.button("Datei speichern"):
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-        data = {"user_id": user_id}
+        data = {"user_id": user_id}  # User-ID wird mitgeschickt
         try:
             res = requests.put(f"{FASTAPI_URL}/upload/", files=files, data=data)
             if res.status_code == 200:
                 response = res.json()
                 st.session_state["dataset_name"] = response.get("dataset_name", "")
                 st.success(f"Datei gespeichert: {st.session_state['dataset_name']}")
+                st.rerun()
+            elif res.status_code == 409:
+                st.error("Ein Datensatz mit diesem Namen existiert bereits!")
             else:
                 st.error(f"Fehler beim Speichern: {res.text}")
         except Exception as e:
             st.error(f"Fehler beim Speichern: {e}")
 
+# --- Dataset List Section ---
+st.subheader("Vorhandene Datensätze")
+dataset_list = get_dataset_list()
+if dataset_list:
+    import pandas as pd
+    # Display as table with select and delete buttons
+    for ds in dataset_list:
+        cols = st.columns([3, 1, 1])
+        cols[0].write(ds)
+        if cols[1].button("Auswählen", key=f"select_{ds}"):
+            st.session_state["dataset_name"] = ds
+            st.success(f"Datensatz ausgewählt: {ds}")
+        if cols[2].button("Löschen", key=f"delete_{ds}"):
+            if delete_dataset_backend(ds):
+                st.success(f"Datensatz gelöscht: {ds}")
+                st.rerun()
+            else:
+                st.error("Fehler beim Löschen!")
+
+# --- Clustering Section ---
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
-    columns = st.multiselect("Spalten für Clustering auswählen", df.columns.tolist())
+    
+    # Versuche die Spalten aus dem Datensatz zu laden
+    try:
+        if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
+            available_columns = df.columns.tolist()
+        else:
+            # Lade den Datensatz aus dem Backend
+            resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}")
+            if resp.status_code == 200:
+                temp_df = pd.read_csv(io.StringIO(resp.content.decode('utf-8')))
+                available_columns = temp_df.columns.tolist()
+            else:
+                available_columns = []
+        
+        if available_columns:
+            use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
+            if use_all_columns:
+                columns = available_columns
+                st.info(f"Verwende alle Spalten: {', '.join(columns)}")
+            else:
+                columns = st.multiselect(
+                    "Spalten für Clustering auswählen",
+                    options=available_columns,
+                    default=available_columns
+                )
+                if not columns:
+                    st.warning("Bitte mindestens eine Spalte auswählen!")
+        else:
+            st.error("Keine Spalten im Datensatz gefunden!")
+            columns = []
+    
+    except Exception as e:
+        st.error(f"Fehler beim Laden der Spalten: {e}")
+        columns = []
+
     clustering_algorithm = st.selectbox("Clustering-Algorithmus", ["kmeans", "dbscan"])
     preprocess = st.checkbox("Preprocessing", value=True)
-    params = {}  # ggf. weitere Parameter
-    if st.button("Clustering starten"):
+    params = {}
+
+    if st.button("Clustering starten") and columns:
         data = {
             "dataset_name": st.session_state["dataset_name"],
             "columns": json.dumps(columns),
             "clustering_algorithm": clustering_algorithm,
             "preprocess": str(preprocess),
-            "user_id": user_id,
+            "user_id": user_id,  # User-ID wird auch beim Clustering mitgegeben
             "params": json.dumps(params)
         }
         try:

@@ -18,6 +18,8 @@ import plotly.express as px
 import uuid
 from fastapi import Form
 import json
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -287,6 +289,11 @@ async def upload_dataset(
     file: UploadFile = File(...),
     user_id: str = Form(...)
 ):
+    data_collection = mongodb_database.get_collection("data")
+    # Check if file with the same name already exists
+    exists = await data_collection.find_one({"dataset_name": file.filename})
+    if exists:
+        raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
         content = await file.read()
         file_stream = io.BytesIO(content)
@@ -300,7 +307,6 @@ async def upload_dataset(
             content_type=file.content_type
         )
 
-        data_collection = mongodb_database.get_collection("data")
         await data_collection.insert_one({
             "dataset_name": file.filename,
             "content_type": file.content_type,
@@ -349,3 +355,29 @@ async def start_clustering(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+
+@app.get("/datasets/")
+async def list_datasets():
+    """
+    Returns a list of all uploaded datasets (filenames).
+    """
+    data_collection = mongodb_database.get_collection("data")
+    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=1000)
+    # Return only the dataset names as a list
+    return [d["dataset_name"] for d in datasets]
+
+@app.delete("/datasets/{dataset_name}")
+async def delete_dataset(dataset_name: str):
+    """
+    Deletes a dataset from MongoDB and MinIO.
+    """
+    data_collection = mongodb_database.get_collection("data")
+    result = await data_collection.delete_one({"dataset_name": dataset_name})
+    try:
+        minio_client.remove_object(BUCKET_NAME, dataset_name)
+    except Exception:
+        pass  # Ignore if file does not exist in MinIO
+    if result.deleted_count == 1:
+        return {"detail": "Dataset deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="Dataset not found")
