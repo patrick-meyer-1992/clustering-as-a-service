@@ -11,6 +11,10 @@ class GaussianMixtureWrapper(BaseClustering):
         self.transform_type = self.params.pop("transform_type", None)
 
     def prepare_data(self, data):
+        
+        # First apply standard scaling and normalization from the base class
+        data = super().prepare_data(data)
+
         if self.transform_type == "quantile":
             transformer = QuantileTransformer(output_distribution="normal")
             data = transformer.fit_transform(data)
