@@ -3,19 +3,18 @@ from datetime import datetime
 import pytz
 
 # Import all clustering wrapper classes
-from clustering.kmeans import KMeansClustering
-from clustering.dbscan import DBSCANClustering
-from clustering.optics import OPTICSClustering
-from clustering.meanshift import MeanShiftClustering
-from clustering.affinitypropagation import AffinityPropagationClustering
-from clustering.agglomerative import AgglomerativeClustering
-from clustering.minibatchkmeans import MiniBatchKMeansClustering
-from clustering.bisectingkmeans import BisectingKMeansClustering
-from clustering.birch import BIRCHClustering
-from clustering.spectral import SpectralClusteringClustering
-from clustering.featureagglomeration import FeatureAgglomerationClustering
-from clustering.spectralbiclustering import SpectralBiclusteringClustering
-from clustering.spectralcoclustering import SpectralCoclusteringClustering
+from clustering.kmeans import KMeansWrapper
+from clustering.dbscan import DBSCANWrapper
+from clustering.optics import OPTICSWrapper
+from clustering.meanshift import MeanShiftWrapper
+from clustering.affinitypropagation import AffinityPropagationWrapper
+from clustering.agglomerativeclustering import AgglomerativeClusteringWrapper
+from clustering.minibatchkmeans import MiniBatchKMeansWrapper
+from clustering.bisectingkmeans import BisectingKMeansWrapper
+from clustering.birch import BIRCHWrapper
+from clustering.spectralclustering import SpectralClusteringWrapper
+from clustering.gaussianmixture import GaussianMixtureWrapper
+from clustering.bayesiangaussianmixture import BayesianGaussianMixtureWrapper
 
 TIMEZONE = pytz.timezone("UTC")
 
@@ -30,10 +29,9 @@ ALGORITHM_MAP = {
     "minibatchkmeans": MiniBatchKMeansClustering,
     "bisectingkmeans": BisectingKMeansClustering,
     "birch": BIRCHClustering,
-    "spectral": SpectralClusteringClustering,
-    "featureagglomeration": FeatureAgglomerationClustering,
-    "spectralbiclustering": SpectralBiclusteringClustering,
-    "spectralcoclustering": SpectralCoclusteringClustering,
+    "spectralclustering": SpectralClusteringWrapper,
+    "gaussianmixture": GaussianMixtureWrapper,
+    "bayesiangaussianmixture": BayesianGaussianMixtureWrapper,
 }
 
 @celery.task(bind=True)
