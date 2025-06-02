@@ -23,32 +23,34 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-BUCKET_NAME = "caas-data"
+def init_connections():
 
-MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
-MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
-MINIO_HOST = os.getenv("MINIO_HOST")
-MINIO_PORT = os.getenv("MINIO_PORT")
+    BUCKET_NAME = "caas-data"
 
-# Configure MinIO client
-minio_client = Minio(
-    endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
-    access_key=MINIO_ACCESS_KEY,   
-    secret_key=MINIO_SECRET_KEY,    
-    secure=False                
-)
-# Ensure the bucket exists
-if not minio_client.bucket_exists(BUCKET_NAME):
-    minio_client.make_bucket(BUCKET_NAME)
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
+    MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
+    MINIO_HOST = os.getenv("MINIO_HOST")
+    MINIO_PORT = os.getenv("MINIO_PORT")
 
-MONGODB_USER = os.getenv("MONGODB_USER")
-MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD")
-MONGODB_DB = os.getenv("MONGODB_DB")
-MONGODB_HOST = os.getenv("MONGODB_HOST")
-MONGODB_PORT = os.getenv("MONGODB_PORT")
+    # Configure MinIO client
+    minio_client = Minio(
+        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
+        access_key=MINIO_ACCESS_KEY,   
+        secret_key=MINIO_SECRET_KEY,    
+        secure=False                
+    )
+    # Ensure the bucket exists
+    if not minio_client.bucket_exists(BUCKET_NAME):
+        minio_client.make_bucket(BUCKET_NAME)
 
-mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
-mongodb_database = mongodb_client.get_database(MONGODB_DB)
+    MONGODB_USER = os.getenv("MONGODB_USER")
+    MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD")
+    MONGODB_DB = os.getenv("MONGODB_DB")
+    MONGODB_HOST = os.getenv("MONGODB_HOST")
+    MONGODB_PORT = os.getenv("MONGODB_PORT")
+
+    mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
+    mongodb_database = mongodb_client.get_database(MONGODB_DB)
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
@@ -383,3 +385,6 @@ async def delete_dataset(dataset_name: str):
         return {"detail": "Dataset deleted"}
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+if __name__ == "__main__":
+    init_connections()
