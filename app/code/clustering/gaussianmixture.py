@@ -1,4 +1,5 @@
 from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import QuantileTransformer, PowerTransformer
 from .base_clustering import BaseClustering
 import collections
 
@@ -7,8 +8,20 @@ class GaussianMixtureWrapper(BaseClustering):
         super().__init__(dataset_name, columns, **params)
         self.name = "gaussian_mixture"
         self.params["n_components"] = n_components
+        self.transform_type = self.params.pop("transform_type", None)
+
+    def prepare_data(self, data):
+        if self.transform_type == "quantile":
+            transformer = QuantileTransformer(output_distribution="normal")
+            data = transformer.fit_transform(data)
+        elif self.transform_type == "power":
+            transformer = PowerTransformer()
+            data = transformer.fit_transform(data)
+        return data
 
     def run(self, data):
+        data = self.prepare_data(data)
+
         model = GaussianMixture(**self.params)
         model.fit(data)
 
