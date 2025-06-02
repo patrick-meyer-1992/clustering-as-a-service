@@ -2,7 +2,7 @@ from sklearn.mixture import GaussianMixture
 from .base_clustering import BaseClustering
 import collections
 
-class GaussianMixtureClustering(BaseClustering):
+class GaussianMixtureWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_components=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "gaussian_mixture"

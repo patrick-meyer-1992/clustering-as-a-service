@@ -2,7 +2,7 @@ from sklearn.cluster import Birch
 from .base_clustering import BaseClustering
 import collections
 
-class BIRCHClustering(BaseClustering):
+class BIRCHWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, threshold=0.5, n_clusters=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "birch"

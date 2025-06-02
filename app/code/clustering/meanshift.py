@@ -2,7 +2,7 @@ from sklearn.cluster import MeanShift
 from .base_clustering import BaseClustering
 import collections
 
-class MeanShiftClustering(BaseClustering):
+class MeanShiftWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, bandwidth=None, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "mean_shift"

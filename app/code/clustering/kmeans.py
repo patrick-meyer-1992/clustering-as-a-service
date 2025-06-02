@@ -3,7 +3,7 @@ from .base_clustering import BaseClustering
 import collections
 
 
-class KMeansClustering(BaseClustering):
+class KMeansWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "kmeans"

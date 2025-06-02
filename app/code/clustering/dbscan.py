@@ -1,7 +1,7 @@
 from sklearn.cluster import DBSCAN
 from .base_clustering import BaseClustering
 
-class DBSCANClustering(BaseClustering):
+class DBSCANWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, eps=0.5, min_samples=5, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "dbscan"

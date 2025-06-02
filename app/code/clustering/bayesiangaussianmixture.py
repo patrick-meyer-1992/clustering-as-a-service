@@ -3,7 +3,7 @@ from .base_clustering import BaseClustering
 import collections
 
 
-class BayesianGaussianMixtureClustering(BaseClustering):
+class BayesianGaussianMixtureWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_components=10, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "bayesian_gaussian_mixture"

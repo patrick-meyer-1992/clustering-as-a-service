@@ -2,7 +2,7 @@ from sklearn.cluster import SpectralClustering
 from .base_clustering import BaseClustering
 import collections
 
-class SpectralClusteringClustering(BaseClustering):
+class SpectralClusteringWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, affinity='rbf', **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "spectral"

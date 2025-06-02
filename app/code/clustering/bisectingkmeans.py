@@ -2,7 +2,7 @@ from sklearn.cluster import BisectingKMeans
 from .base_clustering import BaseClustering
 import collections
 
-class BisectingKMeansClustering(BaseClustering):
+class BisectingKMeansWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "bisecting_kmeans"

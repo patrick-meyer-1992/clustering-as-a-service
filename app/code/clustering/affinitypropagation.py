@@ -3,7 +3,7 @@ from .base_clustering import BaseClustering
 import collections
 
 
-class AffinityPropagationClustering(BaseClustering):
+class AffinityPropagationWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, damping=0.5, preference=None, **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "affinity_propagation"

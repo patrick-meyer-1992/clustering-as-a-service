@@ -2,7 +2,7 @@ from sklearn.cluster import AgglomerativeClustering as SklearnAgglomerativeClust
 from .base_clustering import BaseClustering
 import collections
 
-class AgglomerativeClustering(BaseClustering):
+class AgglomerativeWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params):
         super().__init__(dataset_name, columns, **params)
         self.name = "agglomerative"
