@@ -12,11 +12,12 @@ class MiniBatchKMeansWrapper(BaseClustering):
     def run(self, data):
         model = MiniBatchKMeans(**self.params)
         model.fit(data)
-
-        cluster_sizes = collections.Counter(model.labels_)
+        
+        labels = model.labels_
+        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
 
         result = {
-            "labels": model.labels_.tolist(),
+            "labels": labels.tolist(),
             "inertia": model.inertia_,
             "cluster_centers_": model.cluster_centers_.tolist(),
             "n_iter_": model.n_iter_,

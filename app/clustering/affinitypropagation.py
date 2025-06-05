@@ -15,10 +15,11 @@ class AffinityPropagationWrapper(BaseClustering):
         model = AffinityPropagation(**self.params)
         model.fit(data)
 
-        cluster_sizes = collections.Counter(model.labels_)
+        labels = model.labels_
+        cluster_sizes = {int(k): v for k, v in collections.Counter(model.labels_).items()}
 
         result = {
-            "labels": model.labels_.tolist(),
+            "labels": labels.tolist(),
             "cluster_centers_indices_": model.cluster_centers_indices_.tolist(),
             "cluster_centers_": model.cluster_centers_.tolist(),
             "n_iter_": model.n_iter_,

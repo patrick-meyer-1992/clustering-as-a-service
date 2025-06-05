@@ -1,4 +1,4 @@
-from celery_conn import celery
+from .celery_conn import celery
 from datetime import datetime
 import pytz
 

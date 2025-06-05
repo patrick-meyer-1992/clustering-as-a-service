@@ -1,13 +1,12 @@
-# This Dockerfile is used for FastAPI and for the clustering worker.
 FROM python:3.12-slim
 
-WORKDIR /code
+WORKDIR /app
 
-COPY ./streamlit-requirements.txt /code/requirements.txt
+COPY ./streamlit-requirements.txt /app/requirements.txt
 
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
-COPY ./code/clustering /code/clustering
-COPY ./code/streamlit_app.py /code/
+COPY ./clustering /app/clustering
+COPY ./streamlit /app/streamlit
 
-CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.enableCORS=false"]
+CMD ["streamlit", "run", "streamlit/app.py", "--server.port=8501", "--server.enableCORS=false"]

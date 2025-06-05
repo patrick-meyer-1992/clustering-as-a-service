@@ -16,7 +16,7 @@ class OPTICSWrapper(BaseClustering):
         model.fit(data)
 
         labels = model.labels_
-        cluster_sizes = collections.Counter(labels)
+        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
         n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
         n_noise = list(labels).count(-1)
 

@@ -14,7 +14,7 @@ class BIRCHWrapper(BaseClustering):
         model.fit(data)
 
         labels = model.labels_
-        cluster_sizes = collections.Counter(labels)
+        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
 
         result = {
             "labels": labels.tolist(),

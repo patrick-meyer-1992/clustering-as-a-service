@@ -9,3 +9,4 @@ celery[redis,rabbitmq]
 plotly
 matplotlib
 
+

@@ -12,10 +12,11 @@ class BisectingKMeansWrapper(BaseClustering):
         model = BisectingKMeans(**self.params)
         model.fit(data)
 
-        cluster_sizes = collections.Counter(model.labels_)
+        labels = model.labels_
+        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
 
         result = {
-            "labels": model.labels_.tolist(),
+            "labels": labels.tolist(),
             "cluster_centers_": model.cluster_centers_.tolist(),
             "inertia": model.inertia_,
             "n_iter_": model.n_iter_,

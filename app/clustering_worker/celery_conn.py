@@ -1,7 +1,6 @@
 from celery import Celery
 import os
 
-
 rmq_user = os.getenv('RABBITMQ_DEFAULT_USER')
 rmq_passwd = os.getenv('RABBITMQ_DEFAULT_PASS')
 rmq_host = os.getenv('RABBITMQ_HOST')

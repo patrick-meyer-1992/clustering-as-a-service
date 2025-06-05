@@ -91,9 +91,21 @@ class BaseClustering(ABC):
         labels = result.pop("labels")
 
         # Optionally attach original data and column names
-        if original_data is not None:
-            result["X"] = original_data.tolist()
-            result["columns"] = self.columns
+        # if original_data is not None:
+        #     result["X"] = original_data.tolist()
+        #     result["columns"] = self.columns
+
+        print(f"job_id: {job_id}")
+        print(f"dataset_name: {self.dataset_name}")
+        print(f"columns: {self.columns}")
+        print(f"created_timestamp: {created_timestamp}")
+        print(f"started_timestamp: {started_timestamp}")
+        print(f"finished_timestamp: {datetime.now(TIMEZONE).isoformat()}")
+        print(f"clustering_algorithm: {self.name}")
+        print(f"params: {self.params}")
+        print(f"labels: {labels}")
+        print(f"additional_results: {result}")
+        print(f"user_id: {user_id}")
 
         # Post the result to FastAPI backend
         response = requests.post(
