@@ -345,22 +345,29 @@ async def upload_dataset(
 @app.post("/cluster/")
 async def start_clustering(
     dataset_name: str = Form(...),
-    columns: str = Form(...),  # JSON-String
+    columns: str = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
     params: str = Form("{}")
 ):
     try:
+        # Modulname und Klassenname generieren
+        module_name = clustering_algorithm.lower().replace(' ', '')
+        class_name = f"{clustering_algorithm.replace(' ', '')}Clustering"
+        
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
         params_dict = json.loads(params) if isinstance(params, str) else params
 
+        print(f"Starting clustering job: module={module_name}, class={class_name}")
+        
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
             created_timestamp,
-            clustering_algorithm.lower(),
+            module_name,  # Hier den Modulnamen übergeben
+            class_name,   # Hier den Klassennamen übergeben
             preprocess,
             user_id,
             **params_dict
@@ -376,7 +383,7 @@ async def start_clustering(
             "params": params_dict
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}")
 
 @app.get("/datasets/")
 async def list_datasets(mongodb_database = Depends(get_mongodb)):
@@ -388,7 +395,7 @@ async def list_datasets(mongodb_database = Depends(get_mongodb)):
         {}, 
         {"_id": 0, "dataset_name": 1, "user_id": 1}
     ).to_list(length=1000)
-    return datasets  # Returns list of dicts with dataset_name and user_id
+    return datasets
 
 @app.delete("/datasets/{dataset_name}")
 async def delete_dataset(
@@ -409,4 +416,28 @@ async def delete_dataset(
         return {"detail": "Dataset deleted"}
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    
+
+@app.get("/debug/job/{job_id}")
+async def debug_job(job_id: str):
+    """
+    Debug endpoint to check job status and results
+    """
+    try:
+        # Check Celery task
+        task = celery.AsyncResult(job_id)
+        task_info = {
+            "task_id": task.id,
+            "status": task.status,
+            "result": task.result if task.ready() else None
+        }
+        
+        # Check MongoDB
+        results_collection = mongodb_database.get_collection("results")
+        stored_result = await results_collection.find_one({"job_id": job_id})
+        
+        return {
+            "task_info": task_info,
+            "stored_result": stored_result is not None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")

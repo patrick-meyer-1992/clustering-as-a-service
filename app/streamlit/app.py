@@ -5,6 +5,11 @@ import json
 import numpy as np
 import plotly.graph_objects as go
 import io
+import os
+import importlib
+import inspect
+import time
+
 
 FASTAPI_URL = "http://caas-fastapi:8000"
 
@@ -30,10 +35,46 @@ def delete_dataset_backend(dataset_name):
     except Exception:
         return False
 
+def get_available_clustering_algorithms():
+    """
+    Dynamically loads all clustering algorithms from the clustering directory.
+    Excludes abstract base class.
+    """
+    clustering_dir = os.path.join(os.path.dirname(__file__), 'clustering')
+    algorithms = set()
+    
+    # Liste von Algorithmen die ausgeschlossen werden sollen
+    excluded_algorithms = {'BaseClustering', 'base_clustering'}
+    
+    for file in os.listdir(clustering_dir):
+        if file.endswith('.py') and not file.startswith('__'):
+            module_name = file[:-3]
+            try:
+                module = importlib.import_module(f'clustering.{module_name}')
+                
+                for name, obj in inspect.getmembers(module):
+                    if (inspect.isclass(obj) and 
+                        name.endswith('Clustering') and 
+                        name not in excluded_algorithms and  # Hier prüfen wir auf ausgeschlossene Algorithmen
+                        obj.__module__ == f'clustering.{module_name}'):
+                        
+                        # Namen säubern
+                        algo_name = name.replace('Clustering', '')
+                        if algo_name.endswith('c'):
+                            algo_name = algo_name[:-1]
+                        # CamelCase zu Leerzeichen
+                        algo_name = ''.join([' ' + c if c.isupper() else c for c in algo_name]).strip()
+                        algorithms.add(algo_name)
+                        
+            except Exception as e:
+                print(f"Error loading module {module_name}: {str(e)}")
+    
+    return sorted(algorithms)
+
 # --- Upload Section ---
 uploaded_file = st.file_uploader("CSV-Datei hochladen", type=["csv"])
 
-# Username für alle Aktionen
+# Global user ID for all actions
 user_id = st.text_input("User-ID", value="testuser")
 
 if uploaded_file:
@@ -41,8 +82,9 @@ if uploaded_file:
     st.write("Vorschau deiner Daten:", df.head())
     
     if st.button("Datei speichern"):
+        # Prepare file and user data for upload
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-        data = {"user_id": user_id}  # User-ID wird mitgeschickt
+        data = {"user_id": user_id}
         try:
             res = requests.put(f"{FASTAPI_URL}/upload/", files=files, data=data)
             if res.status_code == 200:
@@ -59,28 +101,26 @@ if uploaded_file:
 
 # --- Dataset List Section ---
 st.subheader("Vorhandene Datensätze")
-st.write("")  # Kleinerer Abstand als mit st.markdown("---")
 dataset_list = get_dataset_list()
 if dataset_list:
-    # Container für einheitliches Styling
+    # Create container for consistent styling
     with st.container():
-        # Header-Zeile
+        # Header row
         header_cols = st.columns([3, 2, 1, 1])
         header_cols[0].markdown("**Datensatzbezeichnung**")
         header_cols[1].markdown("**Benutzer**")
         
-        # Trennlinie nach Header
         st.divider()
         
-        # Für jeden Datensatz eine Zeile mit gleichmäßiger Aufteilung
+        # Create a row for each dataset with uniform spacing
         for dataset in dataset_list:
             col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
             
-            # Dateiname und Benutzer in gleicher Zeile
+            # Display filename and user
             col1.text(dataset['dataset_name'])
             col2.text(dataset.get('user_id', 'unbekannt'))
             
-            # Buttons mit einheitlichem Styling, ohne Umbruch
+            # Action buttons
             if col3.button("✅", key=f"select_{dataset['dataset_name']}", help="Auswählen"):
                 st.session_state["dataset_name"] = dataset['dataset_name']
                 st.success(f"Datensatz ausgewählt: {dataset['dataset_name']}")
@@ -92,7 +132,6 @@ if dataset_list:
                 else:
                     st.error("Fehler beim Löschen!")
             
-            # Trennlinie zwischen den Datensätzen
             st.divider()
 else:
     st.info("Keine Datensätze vorhanden")
@@ -101,12 +140,12 @@ else:
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
     
-    # Versuche die Spalten aus dem Datensatz zu laden
+    # Load columns from selected dataset
     try:
         if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
             available_columns = df.columns.tolist()
         else:
-            # Lade den Datensatz aus dem Backend
+            # Load dataset from backend if not currently uploaded
             resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}")
             if resp.status_code == 200:
                 temp_df = pd.read_csv(io.StringIO(resp.content.decode('utf-8')))
@@ -114,6 +153,7 @@ if st.session_state["dataset_name"]:
             else:
                 available_columns = []
         
+        # Column selection interface
         if available_columns:
             use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
             if use_all_columns:
@@ -135,29 +175,46 @@ if st.session_state["dataset_name"]:
         st.error(f"Fehler beim Laden der Spalten: {e}")
         columns = []
 
-    clustering_algorithm = st.selectbox("Clustering-Algorithmus", ["kmeans", "dbscan"])
+    # Dynamic algorithm selection
+    clustering_algorithms = get_available_clustering_algorithms()
+    clustering_algorithm = st.selectbox(
+        "Clustering-Algorithmus auswählen",
+        options=clustering_algorithms
+    )
     preprocess = st.checkbox("Preprocessing", value=True)
     params = {}
 
-    if st.button("Clustering starten") and columns:
+    if st.button("Clustering starten"):
         data = {
             "dataset_name": st.session_state["dataset_name"],
             "columns": json.dumps(columns),
             "clustering_algorithm": clustering_algorithm,
             "preprocess": str(preprocess),
-            "user_id": user_id,  # User-ID wird auch beim Clustering mitgegeben
+            "user_id": user_id,
             "params": json.dumps(params)
         }
+        
         try:
             res = requests.post(f"{FASTAPI_URL}/cluster/", data=data)
             if res.status_code == 200:
                 response = res.json()
-                st.session_state["job_id"] = response.get("job_id", "")
-                st.success(f"Clustering gestartet! Job-ID: {st.session_state['job_id']}")
+                job_id = response.get("job_id", "")
+                st.session_state["job_id"] = job_id
+                st.success(f"Clustering gestartet! Job-ID: {job_id}")
+                
+                # Warte kurz auf Ergebnisse
+                st.info("Verarbeite Daten...")
+                time.sleep(2)
+                
+                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}")
+                if result_check.status_code == 200:
+                    st.success("Clustering erfolgreich abgeschlossen!")
+                else:
+                    st.error("Clustering konnte nicht erfolgreich durchgeführt werden.")
             else:
-                st.error(f"Fehler beim Clustering: {res.text}")
+                st.error("Fehler beim Starten des Clusterings")
         except Exception as e:
-            st.error(f"Fehler beim Clustering: {e}")
+            st.error(f"Fehler: {str(e)}")
 
 # Presentation Section
 # After asynchron clustering job is ended, the results get saved in mongodb. 

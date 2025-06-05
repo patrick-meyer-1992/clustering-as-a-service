@@ -22,14 +22,20 @@ class BaseClustering(ABC):
         self.params = params
         self.dataset_name = dataset_name
         self.columns = columns
-        self.name = None
+        self.name = "Base Clustering" # Default name
 
     def load_data(self):
-        # Load dataset from FastAPI endpoint
-        response = requests.get(f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/" + self.dataset_name)
-        response.raise_for_status()
-        df = pd.read_csv(io.BytesIO(response.content))
-        return df.to_numpy()
+        try:
+            url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/{self.dataset_name}"
+            print(f"Trying to load data from: {url}")  # Debug
+            response = requests.get(url)
+            response.raise_for_status()
+            df = pd.read_csv(io.BytesIO(response.content))
+            # Nur ausgewählte Spalten verwenden
+            return df[self.columns].to_numpy()
+        except Exception as e:
+            print(f"Error loading data: {str(e)}")
+            raise
 
     def prepare_data(self, data, preprocess=True):
         # Apply preprocessing steps like scaling, normalization, and optional PCA
@@ -86,32 +92,17 @@ class BaseClustering(ABC):
         # Abstract method to run the clustering algorithm
         pass
 
-    def save_results(self, result, job_id, created_timestamp, started_timestamp, user_id, original_data=None):
-        # Pop labels from result dictionary
-        labels = result.pop("labels")
+    def save_results(self, result, job_id, created_timestamp, started_timestamp, user_id):
+        """
+        Save clustering results to FastAPI backend
+        """
+        try:
+            print(f"Saving results for job_id: {job_id}")  # Debug print
+            # Pop labels from result dictionary
+            labels = result.pop("labels")
 
-        # Optionally attach original data and column names
-        # if original_data is not None:
-        #     result["X"] = original_data.tolist()
-        #     result["columns"] = self.columns
-
-        print(f"job_id: {job_id}")
-        print(f"dataset_name: {self.dataset_name}")
-        print(f"columns: {self.columns}")
-        print(f"created_timestamp: {created_timestamp}")
-        print(f"started_timestamp: {started_timestamp}")
-        print(f"finished_timestamp: {datetime.now(TIMEZONE).isoformat()}")
-        print(f"clustering_algorithm: {self.name}")
-        print(f"params: {self.params}")
-        print(f"labels: {labels}")
-        print(f"additional_results: {result}")
-        print(f"user_id: {user_id}")
-
-        # Post the result to FastAPI backend
-        response = requests.post(
-            f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/",
-            json={
-                "job_id": job_id,
+            payload = {
+                "job_id": job_id,  # Hier verwenden wir den übergebenen job_id Parameter
                 "dataset_name": self.dataset_name,
                 "columns": self.columns,
                 "created_timestamp": created_timestamp,
@@ -123,5 +114,20 @@ class BaseClustering(ABC):
                 "additional_results": result,
                 "user_id": user_id
             }
-        )
-        return response
+
+            # Post the result to FastAPI backend
+            url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
+            print(f"Sending results to: {url}")  # Debug print
+            response = requests.post(
+                f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/",
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                print(f"Error saving results: {response.text}")
+                return None
+                
+            return response.json()
+        except Exception as e:
+            print(f"Error in save_results: {str(e)}")
+            return None

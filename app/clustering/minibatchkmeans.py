@@ -3,29 +3,35 @@ from .base_clustering import BaseClustering
 import collections
 
 class MiniBatchKMeansWrapper(BaseClustering):
-    def __init__(self, dataset_name, columns, n_clusters=8, batch_size=100, **params):
-        super().__init__(dataset_name, columns, **params)
-        self.name = "minibatch_kmeans"
+    def __init__(self, dataset_name, columns, n_clusters=8, batch_size=1000, **params):
+        super().__init__(dataset_name, columns)
+        self.name = "Mini Batch KMeans"  # Exakt wie im Frontend
         self.params["n_clusters"] = n_clusters
         self.params["batch_size"] = batch_size
+        self.params.update(params)
 
     def run(self, data):
-        model = MiniBatchKMeans(**self.params)
-        model.fit(data)
-        
-        labels = model.labels_
-        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
+        try:
+            print(f"Running MiniBatchKMeans with params: {self.params}")
+            model = MiniBatchKMeans(**self.params)
+            model.fit(data)
 
-        result = {
-            "labels": labels.tolist(),
-            "inertia": model.inertia_,
-            "cluster_centers_": model.cluster_centers_.tolist(),
-            "n_iter_": model.n_iter_,
-            "n_clusters_": len(set(model.labels_)),
-            "cluster_sizes": dict(cluster_sizes)
-        }
-
-        return result
+            labels = model.labels_
+            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
+            
+            result = {
+                "labels": model.labels_.tolist(),
+                "cluster_centers": model.cluster_centers_.tolist(),
+                "inertia": float(model.inertia_),
+                "n_iter": model.n_iter_,
+                "cluster_sizes": dict(cluster_sizes)
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error in MiniBatchKMeans clustering: {str(e)}")
+            raise
 
 
 

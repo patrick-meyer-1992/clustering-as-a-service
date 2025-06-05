@@ -2,3 +2,4 @@ requests
 streamlit
 plotly
 pandas
+scikit-learn==1.4.0

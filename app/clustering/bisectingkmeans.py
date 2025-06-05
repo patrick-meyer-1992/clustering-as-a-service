@@ -4,27 +4,33 @@ import collections
 
 class BisectingKMeansWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_clusters=8, **params):
-        super().__init__(dataset_name, columns, **params)
-        self.name = "bisecting_kmeans"
+        super().__init__(dataset_name, columns)
+        self.name = "Bisecting KMeans"  # Exakt wie im Frontend
         self.params["n_clusters"] = n_clusters
+        self.params.update(params)
 
     def run(self, data):
-        model = BisectingKMeans(**self.params)
-        model.fit(data)
+        try:
+            print(f"Running BisectingKMeans with params: {self.params}")
+            model = BisectingKMeans(**self.params)
+            model.fit(data)
 
-        labels = model.labels_
-        cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-
-        result = {
-            "labels": labels.tolist(),
-            "cluster_centers_": model.cluster_centers_.tolist(),
-            "inertia": model.inertia_,
-            "n_iter_": model.n_iter_,
-            "n_clusters_": len(set(model.labels_)),
-            "cluster_sizes": dict(cluster_sizes)
-        }
-
-        return result
+            labels = model.labels_
+            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
+            
+            result = {
+                "labels": labels.tolist(),
+                "cluster_centers": model.cluster_centers_.tolist(),
+                "inertia": float(model.inertia_),
+                "n_iter": model.n_iter_.tolist(),
+                "cluster_sizes": dict(cluster_sizes)
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error in BisectingKMeans clustering: {str(e)}")
+            raise
 
 
 
