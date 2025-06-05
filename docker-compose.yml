@@ -92,6 +92,17 @@ services:
     volumes:
       - minio-data:/data
 
+  automl-worker:
+    build:
+      context: ./app
+      dockerfile: automl.Dockerfile
+    env_file:
+      - ./message_broker/.env
+      - ./redis/.env
+    depends_on:
+      - redis
+    restart: always    
+
 volumes:
   rabbitmq-lib:
     driver: local

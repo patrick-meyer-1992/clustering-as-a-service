@@ -20,6 +20,7 @@ from fastapi import Form
 import json
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from celery_conn import celery
 
 app = FastAPI()
 
@@ -383,3 +384,9 @@ async def delete_dataset(dataset_name: str):
         return {"detail": "Dataset deleted"}
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+
+@app.post("/automl/cluster")
+def start_automl_dummy():
+    task = celery.send_task("automl_worker.hello_automl")
+    return JSONResponse(content={"task_id": task.id})
