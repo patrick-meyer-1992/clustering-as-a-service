@@ -37,3 +37,5 @@ tornado
 traitlets
 wcwidth
 smac==0.8.0
+sklearn==0.0 # This is just a dummy. It is needed because autocluster tries to import the deprecated sklearn instead of scikit-learn
+autocluster

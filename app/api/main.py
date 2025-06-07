@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, D
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Union
-from clustering_worker.tasks import run_clustering_job
-from clustering_worker.celery_conn import celery
+from workers.tasks import run_clustering_job
+from workers.celery_conn import celery
 from minio import Minio
 from minio.error import S3Error
 from datetime import datetime
