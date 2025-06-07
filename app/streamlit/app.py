@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -5,11 +6,11 @@ import json
 import numpy as np
 import plotly.graph_objects as go
 import io
-import os
-import importlib
-import inspect
+import sys
 import time
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from clustering import wrappers
 
 FASTAPI_URL = "http://caas-fastapi:8000"
 
@@ -40,36 +41,9 @@ def get_available_clustering_algorithms():
     Dynamically loads all clustering algorithms from the clustering directory.
     Excludes abstract base class.
     """
-    clustering_dir = os.path.join(os.path.dirname(__file__), 'clustering')
-    algorithms = set()
+    algorithms = {getattr(wrappers, algo).frontend_name: getattr(wrappers, algo).backend_name for algo in dir(wrappers) if algo.endswith('Wrapper')}
     
-    # Liste von Algorithmen die ausgeschlossen werden sollen
-    excluded_algorithms = {'BaseClustering', 'base_clustering'}
-    
-    for file in os.listdir(clustering_dir):
-        if file.endswith('.py') and not file.startswith('__'):
-            module_name = file[:-3]
-            try:
-                module = importlib.import_module(f'clustering.{module_name}')
-                
-                for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and 
-                        name.endswith('Clustering') and 
-                        name not in excluded_algorithms and  # Hier prüfen wir auf ausgeschlossene Algorithmen
-                        obj.__module__ == f'clustering.{module_name}'):
-                        
-                        # Namen säubern
-                        algo_name = name.replace('Clustering', '')
-                        if algo_name.endswith('c'):
-                            algo_name = algo_name[:-1]
-                        # CamelCase zu Leerzeichen
-                        algo_name = ''.join([' ' + c if c.isupper() else c for c in algo_name]).strip()
-                        algorithms.add(algo_name)
-                        
-            except Exception as e:
-                print(f"Error loading module {module_name}: {str(e)}")
-    
-    return sorted(algorithms)
+    return algorithms
 
 # --- Upload Section ---
 uploaded_file = st.file_uploader("CSV-Datei hochladen", type=["csv"])
@@ -179,7 +153,7 @@ if st.session_state["dataset_name"]:
     clustering_algorithms = get_available_clustering_algorithms()
     clustering_algorithm = st.selectbox(
         "Clustering-Algorithmus auswählen",
-        options=clustering_algorithms
+        options=sorted(clustering_algorithms.keys())
     )
     preprocess = st.checkbox("Preprocessing", value=True)
     params = {}
@@ -188,7 +162,7 @@ if st.session_state["dataset_name"]:
         data = {
             "dataset_name": st.session_state["dataset_name"],
             "columns": json.dumps(columns),
-            "clustering_algorithm": clustering_algorithm,
+            "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
             "preprocess": str(preprocess),
             "user_id": user_id,
             "params": json.dumps(params)
