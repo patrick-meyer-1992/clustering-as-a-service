@@ -38,7 +38,6 @@ async def get_mongodb():
         print(f"Using MongoDB URL: {MONGODB_URL}")
     else:
         mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
-        print(f"Connecting to MongoDB at {MONGODB_HOST}:{MONGODB_PORT} with user {MONGODB_USER} {MONGODB_PASSWORD}")
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
     try:
@@ -352,22 +351,17 @@ async def start_clustering(
     params: str = Form("{}")
 ):
     try:
-        # Modulname und Klassenname generieren
-        module_name = clustering_algorithm.lower().replace(' ', '')
-        class_name = f"{clustering_algorithm.replace(' ', '')}Clustering"
-        
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
         params_dict = json.loads(params) if isinstance(params, str) else params
 
-        print(f"Starting clustering job: module={module_name}, class={class_name}")
+        # print(f"Starting clustering job: module={module_name}, class={class_name}")
         
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
             created_timestamp,
-            module_name,  # Hier den Modulnamen übergeben
-            class_name,   # Hier den Klassennamen übergeben
+            clustering_algorithm,
             preprocess,
             user_id,
             **params_dict
@@ -418,7 +412,10 @@ async def delete_dataset(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
 @app.get("/debug/job/{job_id}")
-async def debug_job(job_id: str):
+async def debug_job(
+    job_id: str,
+    mongodb_database = Depends(get_mongodb)
+    ):
     """
     Debug endpoint to check job status and results
     """
