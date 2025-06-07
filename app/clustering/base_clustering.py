@@ -18,6 +18,8 @@ fastapi_port = os.getenv('FASTAPI_PORT')
 fastapi_protocol = os.getenv('FASTAPI_PROTOCOL')
 
 class BaseClustering(ABC):
+    frontend_name = None
+    backend_name = None
     def __init__(self, dataset_name, columns, **params):
         self.params = params
         self.dataset_name = dataset_name
@@ -108,7 +110,7 @@ class BaseClustering(ABC):
                 "created_timestamp": created_timestamp,
                 "started_timestamp": started_timestamp,
                 "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
-                "clustering_algorithm": self.name,
+                "clustering_algorithm": self.frontend_name,
                 "params": self.params,
                 "labels": labels,
                 "additional_results": result,
