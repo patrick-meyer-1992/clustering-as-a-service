@@ -10,6 +10,7 @@ from sklearn.cluster import MeanShift
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.cluster import OPTICS
 from sklearn.cluster import SpectralClustering
+from sklearn.preprocessing import QuantileTransformer, PowerTransformer
 import numpy as np
 
 from .base_clustering import BaseClustering
@@ -93,6 +94,20 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_components=10, **params):
         super().__init__(dataset_name, columns, **params)
         self.params["n_components"] = n_components
+        self.transform_type = self.params.pop("transform_type", None)
+
+    def prepare_data(self, data):
+        
+        # First apply standard scaling and normalization from the base class
+        data = super().prepare_data(data)
+
+        if self.transform_type == "quantile":
+            transformer = QuantileTransformer(output_distribution="normal")
+            data = transformer.fit_transform(data)
+        elif self.transform_type == "power":
+            transformer = PowerTransformer()
+            data = transformer.fit_transform(data)
+        return data
 
     def run(self, data):
         model = BayesianGaussianMixture(**self.params)
@@ -211,6 +226,20 @@ class GaussianMixtureWrapper(BaseClustering):
     def __init__(self, dataset_name, columns, n_components=3, **params):
         super().__init__(dataset_name, columns, **params)
         self.params["n_components"] = n_components
+        self.transform_type = self.params.pop("transform_type", None)
+
+    def prepare_data(self, data):
+        
+        # First apply standard scaling and normalization from the base class
+        data = super().prepare_data(data)
+
+        if self.transform_type == "quantile":
+            transformer = QuantileTransformer(output_distribution="normal")
+            data = transformer.fit_transform(data)
+        elif self.transform_type == "power":
+            transformer = PowerTransformer()
+            data = transformer.fit_transform(data)
+        return data
 
     def run(self, data):
         model = GaussianMixture(**self.params)
