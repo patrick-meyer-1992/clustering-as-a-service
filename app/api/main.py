@@ -3,7 +3,7 @@ import os
 import io
 import json
 from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Union
 from clustering_worker.tasks import run_clustering_job
@@ -438,3 +438,9 @@ async def debug_job(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
+    
+
+@app.post("/automl/cluster")
+def start_automl_dummy():
+    task = celery.send_task("automl_worker.hello_automl")
+    return JSONResponse(content={"task_id": task.id})
