@@ -59,11 +59,11 @@ class AgglomerativeClusteringWrapper(BaseClustering):
     backend_name = "agglomerative"
     frontend_name = "Agglomerative"  
 
-    def __init__(self, dataset_name, columns, n_clusters=2, linkage='ward', **params):
-        super().__init__(dataset_name, columns)
+    def __init__(self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params):
+        super().__init__(dataset_name, columns, **params)
         self.params["n_clusters"] = n_clusters
         self.params["linkage"] = linkage
-        self.params.update(params)
+        self.params["affinity"] = affinity
 
     def run(self, data):
         try:
