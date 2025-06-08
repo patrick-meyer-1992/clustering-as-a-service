@@ -4,11 +4,11 @@ services:
     build:
       context: ./app
       dockerfile: fastapi.Dockerfile
-    command: uvicorn fastapi_main:app --host 0.0.0.0 --reload
+    command: uvicorn api.main:app --host 0.0.0.0 --reload
     ports:
       - "7001:8000"
     volumes:
-      - ./app/code/:/code/ # For hot reload
+      - ./app/api/:/app/api # For hot reload
     env_file:
       - ./message_broker/.env
       - ./object_storage/.env
@@ -50,14 +50,14 @@ services:
       start_period: 2s
 
   clustering:
-    container_name: caas-clustering
+    container_name: caas-clustering_worker
     build:
       context: ./app
-      dockerfile: clustering.Dockerfile
+      dockerfile: clustering_worker.Dockerfile
     env_file:
       - ./message_broker/.env
       - ./redis/.env
-      - ./app/.env
+      - ./app/api/.env
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -91,6 +91,18 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
+
+  automl-worker:
+    container_name: caas-automl_worker
+    build:
+      context: ./app
+      dockerfile: automl.Dockerfile
+    env_file:
+      - ./message_broker/.env
+      - ./redis/.env
+    depends_on:
+      - redis
+    restart: always    
 
 volumes:
   rabbitmq-lib:

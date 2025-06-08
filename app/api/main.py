@@ -1,57 +1,70 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks
-from fastapi.responses import StreamingResponse
+import sys
+import os
+import io
+import json
+from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Depends
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Union
-from tasks import run_clustering_job
-from celery_conn import celery
-import os
+from workers.tasks import run_clustering_job
+from workers.celery_conn import celery
 from minio import Minio
 from minio.error import S3Error
-import io
 from datetime import datetime
 import pytz
 from pymongo import AsyncMongoClient
 from fastapi import Query
-import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
-import uuid
 from fastapi import Form
-import json
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 app = FastAPI()
-
 BUCKET_NAME = "caas-data"
-
-MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
-MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
-MINIO_HOST = os.getenv("MINIO_HOST")
-MINIO_PORT = os.getenv("MINIO_PORT")
-
-# Configure MinIO client
-minio_client = Minio(
-    endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
-    access_key=MINIO_ACCESS_KEY,   
-    secret_key=MINIO_SECRET_KEY,    
-    secure=False                
-)
-# Ensure the bucket exists
-if not minio_client.bucket_exists(BUCKET_NAME):
-    minio_client.make_bucket(BUCKET_NAME)
-
-MONGODB_USER = os.getenv("MONGODB_USER")
-MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD")
-MONGODB_DB = os.getenv("MONGODB_DB")
-MONGODB_HOST = os.getenv("MONGODB_HOST")
-MONGODB_PORT = os.getenv("MONGODB_PORT")
-
-mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
-mongodb_database = mongodb_client.get_database(MONGODB_DB)
-
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
+
+async def get_mongodb():
+    MONGODB_USER = os.getenv("MONGODB_USER")
+    MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD")
+    MONGODB_DB = os.getenv("MONGODB_DB")
+    MONGODB_HOST = os.getenv("MONGODB_HOST")
+    MONGODB_PORT = os.getenv("MONGODB_PORT")
+
+    # For testing purposes, you can set MONGODB_URL in your environment variables
+    MONGODB_URL = os.getenv("MONGODB_URL", None)
+
+    if MONGODB_URL:
+        mongodb_client = AsyncMongoClient(MONGODB_URL)
+        print(f"Using MongoDB URL: {MONGODB_URL}")
+    else:
+        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
+
+    mongodb_database = mongodb_client.get_database(MONGODB_DB)
+    try:
+        yield mongodb_database
+    finally:
+        await mongodb_client.close()
+
+async def get_minio():
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
+    MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
+    MINIO_HOST = os.getenv("MINIO_HOST")
+    MINIO_PORT = os.getenv("MINIO_PORT")
+
+    # Configure MinIO client
+    minio_client = Minio(
+        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
+        access_key=MINIO_ACCESS_KEY,   
+        secret_key=MINIO_SECRET_KEY,    
+        secure=False                
+    )
+    # Ensure the bucket exists
+    if not minio_client.bucket_exists(BUCKET_NAME):
+        minio_client.make_bucket(BUCKET_NAME)
+
+    
+    yield minio_client
+
 class JobRequest(BaseModel):
     dataset_name: str
     columns: List[str]
@@ -76,10 +89,6 @@ class ResultPutRequest(BaseModel):
     labels: List[int]
     additional_results: Dict[str, Any]
     user_id: str
-
-# @app.get("/items/{item_id}")
-# def read_item(item_id: int, q: Union[str, None] = None):
-#     return {"item_id": item_id, "q": q}
 
 @app.post("/job/")
 def post_job(req: JobRequest):
@@ -117,7 +126,11 @@ def post_job(req: JobRequest):
     return response
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
-async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
+async def get_dataset(
+    dataset_name: str, 
+    background_tasks: BackgroundTasks,
+    minio_client: Minio = Depends(get_minio)
+    ):
     try:
         minio_response = minio_client.get_object(BUCKET_NAME, dataset_name)
         background_tasks.add_task(minio_response.close)
@@ -139,7 +152,8 @@ async def get_dataset(dataset_name: str, background_tasks: BackgroundTasks):
 @app.get("/cluster/{task_id}")
 async def get_clustering_result(
     task_id: str,
-    presentation: str = Query("table", enum=["table", "raw", "graph"])
+    presentation: str = Query("table", enum=["table", "raw", "graph"]),
+    mongodb_database = Depends(get_mongodb),
 ):
     
     # get result from MongoDB
@@ -222,7 +236,9 @@ async def put_dataset(
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
-    params: str = Form("{}")
+    params: str = Form("{}"),
+    mongodb_database = Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio)
 ):
 
     # After data upload, the file is stored in MinIO and a clustering job is started.
@@ -279,7 +295,10 @@ async def put_dataset(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
     
 @app.post("/result/")
-async def post_result(req: ResultPutRequest):
+async def post_result(
+    req: ResultPutRequest,
+    mongodb_database = Depends(get_mongodb)
+    ):
     result_collection = mongodb_database.get_collection("results")
     await result_collection.insert_one(req.model_dump())
     return {"job_id": req.job_id}
@@ -287,7 +306,9 @@ async def post_result(req: ResultPutRequest):
 @app.put("/upload/")
 async def upload_dataset(
     file: UploadFile = File(...),
-    user_id: str = Form(...)
+    user_id: str = Form(...),
+    mongodb_database = Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio)
 ):
     data_collection = mongodb_database.get_collection("data")
     # Check if file with the same name already exists
@@ -323,7 +344,7 @@ async def upload_dataset(
 @app.post("/cluster/")
 async def start_clustering(
     dataset_name: str = Form(...),
-    columns: str = Form(...),  # JSON-String
+    columns: str = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
@@ -334,11 +355,13 @@ async def start_clustering(
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
         params_dict = json.loads(params) if isinstance(params, str) else params
 
+        # print(f"Starting clustering job: module={module_name}, class={class_name}")
+        
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
             created_timestamp,
-            clustering_algorithm.lower(),
+            clustering_algorithm,
             preprocess,
             user_id,
             **params_dict
@@ -354,10 +377,10 @@ async def start_clustering(
             "params": params_dict
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}")
 
 @app.get("/datasets/")
-async def list_datasets():
+async def list_datasets(mongodb_database = Depends(get_mongodb)):
     """
     Returns a list of all uploaded datasets with their user IDs.
     """
@@ -366,10 +389,14 @@ async def list_datasets():
         {}, 
         {"_id": 0, "dataset_name": 1, "user_id": 1}
     ).to_list(length=1000)
-    return datasets  # Returns list of dicts with dataset_name and user_id
+    return datasets
 
 @app.delete("/datasets/{dataset_name}")
-async def delete_dataset(dataset_name: str):
+async def delete_dataset(
+    dataset_name: str,
+    mongodb_database = Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio)
+    ):
     """
     Deletes a dataset from MongoDB and MinIO.
     """
@@ -383,3 +410,37 @@ async def delete_dataset(dataset_name: str):
         return {"detail": "Dataset deleted"}
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
+
+@app.get("/debug/job/{job_id}")
+async def debug_job(
+    job_id: str,
+    mongodb_database = Depends(get_mongodb)
+    ):
+    """
+    Debug endpoint to check job status and results
+    """
+    try:
+        # Check Celery task
+        task = celery.AsyncResult(job_id)
+        task_info = {
+            "task_id": task.id,
+            "status": task.status,
+            "result": task.result if task.ready() else None
+        }
+        
+        # Check MongoDB
+        results_collection = mongodb_database.get_collection("results")
+        stored_result = await results_collection.find_one({"job_id": job_id})
+        
+        return {
+            "task_info": task_info,
+            "stored_result": stored_result is not None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
+    
+
+@app.post("/automl/cluster")
+def start_automl_dummy():
+    task = celery.send_task("automl_worker.hello_automl")
+    return JSONResponse(content={"task_id": task.id})
