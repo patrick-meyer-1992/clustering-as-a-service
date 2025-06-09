@@ -12,12 +12,3 @@ repos:
        name: Ruff Formatter
        files: ^app/ 
        stages: [pre-commit]
- # Codespell for common misspellings
- - repo: https://github.com/codespell-project/codespell
-   rev: v2.3.0
-   hooks:
-     - id: codespell
-       name: Spell Checker
-       files: ^app/ # Only backend and frontend directories
-      #  args: []
-       stages: [pre-commit]

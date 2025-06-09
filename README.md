@@ -7,7 +7,6 @@ Um die Lesbarkeit des Codes zu verbessern und um einige Bugs frühzeitig zu verm
 
 Die pre-commit hooks prüfen und korrigieren teils automatisch die Formatierung des Codes.
 Darüber hinaus werden erste Qualitätsprüfung des Codes vorgenommen. (sog. Linting).
-Zuletzt findet auch eine Rechtschreibprüfung (nur Englisch) statt.
 
 ### Installation
 
