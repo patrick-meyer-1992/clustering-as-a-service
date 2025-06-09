@@ -1,0 +1,23 @@
+repos:
+ # Codespell for common misspellings
+ - repo: https://github.com/codespell-project/codespell
+   rev: v2.3.0
+   hooks:
+     - id: codespell
+       name: Spell Checker
+       files: ^app/ # Only backend and frontend directories
+      #  args: []
+       stages: [pre-commit]
+ # Ruff for Python formatting and linting
+ - repo: https://github.com/astral-sh/ruff-pre-commit
+   rev: v0.7.0
+   hooks:
+     - id: ruff
+       name: Ruff Linter 
+       args: ["--fix"] # Automatically fix issues
+       files: ^app/ 
+       stages: [pre-commit]
+     - id: ruff-format
+       name: Ruff Formatter
+       files: ^app/ 
+       stages: [pre-commit]
