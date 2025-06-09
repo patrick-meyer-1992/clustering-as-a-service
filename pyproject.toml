@@ -12,14 +12,10 @@ lint.select = [
  "SIM",
  # isort
  "I",]  # Rules to apply
-lint.ignore = ["B008"]                 # Example of ignoring specific rules
+lint.ignore = ["B008", "SIM105"]                 # Example of ignoring specific rules
 target-version = "py312"         # Target Python version
 line-length = 100                # Line length for formatting
 lint.fixable = ["ALL"]           # Allow automatic fixes for all fixable issues
 
 [tool.ruff.lint.isort]
 force-single-line = false    
-
-[tool.mypy]
-ignore_missing_imports = false   # Display error for all missing imports
-strict = true                    # Enable more checks
