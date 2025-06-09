@@ -1,14 +1,14 @@
-import pytest
-from pymongo import AsyncMongoClient
 import json
 import os
 
+import pytest
+from pymongo import AsyncMongoClient
 
 
 @pytest.fixture(scope="module")
 def set_env():
-    
     os.environ["MONGODB_URL"] = "mongodb://localhost:27018/caas"
+
 
 @pytest.fixture(scope="module")
 async def test_client(set_env):
@@ -17,12 +17,13 @@ async def test_client(set_env):
     await client.drop_database("caas")  # Clean up after all tests
     await client.close()
 
+
 @pytest.fixture(scope="function")
 async def test_db(test_client):
     db = test_client["caas"]
     result_collection = db["results"]
-    
-    with open("./app/api/tests/res/clustering_result.json", "r") as file:
+
+    with open("./app/api/tests/res/clustering_result.json") as file:
         mock_result = json.load(file)
         await result_collection.insert_one(mock_result)
 
