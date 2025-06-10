@@ -19,7 +19,7 @@ repos:
        entry: bash -c "docker run --name test-mongo -p 27018:27017 -d mongo && pytest && docker stop test-mongo && docker rm test-mongo"
        language: system
        pass_filenames: false
-       stages: [pre-commit, pre-push]
+       stages: [pre-commit]
 
        
 
