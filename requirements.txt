@@ -1,3 +1,14 @@
 pytest
-pytest-asyncio
 pre-commit
+pymongo
+httpx
+pandas
+numpy
+plotly
+pytz
+fastapi
+scikit-learn
+streamlit
+minio
+celery[redis,rabbitmq]
+python-multipart
