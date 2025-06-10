@@ -1,25 +1,14 @@
 repos:
- # Ruff for Python formatting and linting
- - repo: https://github.com/astral-sh/ruff-pre-commit
-   rev: v0.11.13
-   hooks:
-     - id: ruff
-       name: Ruff Linter 
-       args: ["--fix"] # Automatically fix issues
-       files: ^app/ 
-       stages: [pre-commit]
-     - id: ruff-format
-       name: Ruff Formatter
-       files: ^app/ 
-       stages: [pre-commit]
- - repo: local
-   hooks:
-     - id: pytest
-       name: Unit Tests
-       entry: bash -c "docker run --name test-mongo -p 27018:27017 -d mongo && pytest && docker stop test-mongo && docker rm test-mongo"
-       language: system
-       pass_filenames: false
-       stages: [pre-commit]
-
-       
-
+  # Ruff for Python formatting and linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        name: Ruff Linter
+        args: ["--fix"] # Automatically fix issues
+        files: ^app/
+        stages: [pre-commit]
+      - id: ruff-format
+        name: Ruff Formatter
+        files: ^app/
+        stages: [pre-commit]
