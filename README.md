@@ -52,5 +52,3 @@ In der Datei `pyproject.toml` können in das Array `lint.ignore` IDs von Fehlert
 **Fehler ignorieren**
 
 Wenn der Fehler aktuell nicht behoben werden kann, aber auch nicht als generelle Ausnahme ergänzt werden soll, können die Tests für diesen Commit mit `--no-verify` ausgesetzt werden, z.B. `git commit -m "add new feature" --no-verify`.
-
-Just for push
