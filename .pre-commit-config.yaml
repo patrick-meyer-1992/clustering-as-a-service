@@ -1,0 +1,14 @@
+repos:
+  # Ruff for Python formatting and linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff
+        name: Ruff Linter
+        args: ["--fix"] # Automatically fix issues
+        files: ^app/
+        stages: [pre-commit]
+      - id: ruff-format
+        name: Ruff Formatter
+        files: ^app/
+        stages: [pre-commit]

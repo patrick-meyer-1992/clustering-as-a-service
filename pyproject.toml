@@ -1,0 +1,21 @@
+[tool.ruff]
+lint.select = [    
+ # pycodestyle
+ "E",
+ # Pyflakes
+ "F",
+ # pyupgrade
+ "UP",
+ # flake8-bugbear
+ "B",
+ # flake8-simplify
+ "SIM",
+ # isort
+ "I",]  # Rules to apply
+lint.ignore = ["B008", "SIM105"]                 # Example of ignoring specific rules
+target-version = "py312"         # Target Python version
+line-length = 100                # Line length for formatting
+lint.fixable = ["ALL"]           # Allow automatic fixes for all fixable issues
+
+[tool.ruff.lint.isort]
+force-single-line = false    

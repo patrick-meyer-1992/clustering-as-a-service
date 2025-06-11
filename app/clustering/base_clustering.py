@@ -1,30 +1,38 @@
-from abc import ABC, abstractmethod
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, MaxAbsScaler
-from sklearn.preprocessing import Normalizer
-from sklearn.decomposition import PCA
-import requests
-import os
-import pandas as pd
 import io
+import os
+from abc import ABC, abstractmethod
 from datetime import datetime
+
+import pandas as pd
 import pytz
+import requests
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import (
+    MaxAbsScaler,
+    MinMaxScaler,
+    Normalizer,
+    RobustScaler,
+    StandardScaler,
+)
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
 
 # Environment variables for FastAPI connection
-fastapi_host = os.getenv('FASTPI_HOST')
-fastapi_port = os.getenv('FASTAPI_PORT')
-fastapi_protocol = os.getenv('FASTAPI_PROTOCOL')
+fastapi_host = os.getenv("FASTPI_HOST")
+fastapi_port = os.getenv("FASTAPI_PORT")
+fastapi_protocol = os.getenv("FASTAPI_PROTOCOL")
+
 
 class BaseClustering(ABC):
     frontend_name = None
     backend_name = None
+
     def __init__(self, dataset_name, columns, **params):
         self.params = params
         self.dataset_name = dataset_name
         self.columns = columns
-        self.name = "Base Clustering" # Default name
+        self.name = "Base Clustering"  # Default name
 
     def load_data(self):
         try:
@@ -114,21 +122,20 @@ class BaseClustering(ABC):
                 "params": self.params,
                 "labels": labels,
                 "additional_results": result,
-                "user_id": user_id
+                "user_id": user_id,
             }
 
             # Post the result to FastAPI backend
             url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
             print(f"Sending results to: {url}")  # Debug print
             response = requests.post(
-                f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/",
-                json=payload
+                f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/", json=payload
             )
-            
+
             if response.status_code != 200:
                 print(f"Error saving results: {response.text}")
                 return None
-                
+
             return response.json()
         except Exception as e:
             print(f"Error in save_results: {str(e)}")

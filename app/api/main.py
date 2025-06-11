@@ -1,27 +1,26 @@
-import sys
-import os
 import io
 import json
-from fastapi import FastAPI, HTTPException, File, UploadFile, BackgroundTasks, Depends
-from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel
-from typing import List, Dict, Any, Union
-from workers.tasks import run_clustering_job
-from workers.celery_conn import celery
-from minio import Minio
-from minio.error import S3Error
+import os
 from datetime import datetime
-import pytz
-from pymongo import AsyncMongoClient
-from fastapi import Query
+from typing import Any
+
 import numpy as np
 import plotly.express as px
-from fastapi import Form
+import pytz
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
+from minio import Minio
+from minio.error import S3Error
+from pydantic import BaseModel
+from pymongo import AsyncMongoClient
+from workers.celery_conn import celery
+from workers.tasks import run_clustering_job
 
 app = FastAPI()
 BUCKET_NAME = "caas-data"
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
+
 
 async def get_mongodb():
     MONGODB_USER = os.getenv("MONGODB_USER")
@@ -37,13 +36,16 @@ async def get_mongodb():
         mongodb_client = AsyncMongoClient(MONGODB_URL)
         print(f"Using MongoDB URL: {MONGODB_URL}")
     else:
-        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}")
+        mongodb_client = AsyncMongoClient(
+            f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}"
+        )
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
     try:
         yield mongodb_database
     finally:
         await mongodb_client.close()
+
 
 async def get_minio():
     MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
@@ -53,42 +55,45 @@ async def get_minio():
 
     # Configure MinIO client
     minio_client = Minio(
-        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",  
-        access_key=MINIO_ACCESS_KEY,   
-        secret_key=MINIO_SECRET_KEY,    
-        secure=False                
+        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=False,
     )
     # Ensure the bucket exists
     if not minio_client.bucket_exists(BUCKET_NAME):
         minio_client.make_bucket(BUCKET_NAME)
 
-    
     yield minio_client
+
 
 class JobRequest(BaseModel):
     dataset_name: str
-    columns: List[str]
+    columns: list[str]
     clustering_algorithm: str
     preprocess: bool = True
     user_id: str
-    params: Dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
+    params: dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
+
 
 class DatasetRequest(BaseModel):
     dataset_name: str
     user_id: str
 
+
 class ResultPutRequest(BaseModel):
     job_id: str
     dataset_name: str
-    columns: List[str]
+    columns: list[str]
     created_timestamp: str
     started_timestamp: str
     finished_timestamp: str
     clustering_algorithm: str
-    params: Dict[str, Any]
-    labels: List[int]
-    additional_results: Dict[str, Any]
+    params: dict[str, Any]
+    labels: list[int]
+    additional_results: dict[str, Any]
     user_id: str
+
 
 @app.post("/job/")
 def post_job(req: JobRequest):
@@ -104,14 +109,14 @@ def post_job(req: JobRequest):
 
     job = run_clustering_job.delay(
         req.dataset_name,
-        req.columns, 
+        req.columns,
         created_timestamp,
-        req.clustering_algorithm.lower(), 
+        req.clustering_algorithm.lower(),
         req.preprocess,
         req.user_id,
         **req.params,
-        )
-    
+    )
+
     response = {
         "job_id": job.id,
         "dataset_name": req.dataset_name,
@@ -120,17 +125,16 @@ def post_job(req: JobRequest):
         "clustering_algorithm": req.clustering_algorithm.lower(),
         "preprocess": req.preprocess,
         "user_id": req.user_id,
-        "params": req.params
+        "params": req.params,
     }
 
     return response
 
+
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(
-    dataset_name: str, 
-    background_tasks: BackgroundTasks,
-    minio_client: Minio = Depends(get_minio)
-    ):
+    dataset_name: str, background_tasks: BackgroundTasks, minio_client: Minio = Depends(get_minio)
+):
     try:
         minio_response = minio_client.get_object(BUCKET_NAME, dataset_name)
         background_tasks.add_task(minio_response.close)
@@ -139,13 +143,13 @@ async def get_dataset(
             minio_response,
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={dataset_name}"},
-            background=background_tasks
+            background=background_tasks,
         )
 
     except S3Error as err:
-        raise HTTPException(status_code=404, detail=f"MinIO error: {err}")
+        raise HTTPException(status_code=404, detail=f"MinIO error: {err}") from err
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 # Get clustering result by task_id | Forwarding results to the frontend
@@ -153,9 +157,8 @@ async def get_dataset(
 async def get_clustering_result(
     task_id: str,
     presentation: str = Query("table", enum=["table", "raw", "graph"]),
-    mongodb_database = Depends(get_mongodb),
+    mongodb_database=Depends(get_mongodb),
 ):
-    
     # get result from MongoDB
     result_collection = mongodb_database.get_collection("results")
     result = await result_collection.find_one({"job_id": task_id})
@@ -174,8 +177,8 @@ async def get_clustering_result(
     if presentation == "table":
         if X is not None and columns is not None:
             df = []
-            for row, label in zip(X, labels):
-                row_dict = {col: val for col, val in zip(columns, row)}
+            for row, label in zip(X, labels, strict=False):
+                row_dict = {col: val for col, val in zip(columns, row, strict=False)}
                 row_dict["Cluster"] = label
                 df.append(row_dict)
             return {"data": df, "columns": columns + ["Cluster"]}
@@ -198,7 +201,7 @@ async def get_clustering_result(
             x=X_np[:, 0],
             y=X_np[:, 1],
             color=labels_np.astype(str),
-            title=f"Clustering: {result.get('clustering_algorithm')}"
+            title=f"Clustering: {result.get('clustering_algorithm')}",
         )
         return fig.to_dict()
 
@@ -231,16 +234,15 @@ async def get_clustering_result(
 
 @app.put("/dataset/")
 async def put_dataset(
-    file: UploadFile = File(...), # TODO: streaming file
-    columns: List[str] = Form(...),
+    file: UploadFile = File(...),  # TODO: streaming file
+    columns: list[str] = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
     params: str = Form("{}"),
-    mongodb_database = Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio)
+    mongodb_database=Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio),
 ):
-
     # After data upload, the file is stored in MinIO and a clustering job is started.
 
     try:
@@ -254,15 +256,17 @@ async def put_dataset(
             file.filename,
             data=file_stream,
             length=len(content),
-            content_type=file.content_type
+            content_type=file.content_type,
         )
 
         data_collection = mongodb_database.get_collection("data")
-        await data_collection.insert_one({
-            "dataset_name": file.filename,
-            "content_type": file.content_type,
-            "size": len(content),
-        })
+        await data_collection.insert_one(
+            {
+                "dataset_name": file.filename,
+                "content_type": file.content_type,
+                "size": len(content),
+            }
+        )
 
         # start Clustering-Job and forward it to Celery
         created_timestamp = datetime.now(TIMEZONE).isoformat()
@@ -276,39 +280,38 @@ async def put_dataset(
             clustering_algorithm.lower(),
             preprocess,
             user_id,
-            **params_dict
+            **params_dict,
         )
 
         return {
             "dataset_name": file.filename,
-            "job_id": job.id, # This is the Celery job ID
+            "job_id": job.id,  # This is the Celery job ID
             "columns": columns,
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
-            "params": params_dict
+            "params": params_dict,
         }
 
     except S3Error as err:
-        raise HTTPException(status_code=500, detail=f"MinIO error: {err}")
+        raise HTTPException(status_code=500, detail=f"MinIO error: {err}") from err
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
-    
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
+
 @app.post("/result/")
-async def post_result(
-    req: ResultPutRequest,
-    mongodb_database = Depends(get_mongodb)
-    ):
+async def post_result(req: ResultPutRequest, mongodb_database=Depends(get_mongodb)):
     result_collection = mongodb_database.get_collection("results")
     await result_collection.insert_one(req.model_dump())
     return {"job_id": req.job_id}
+
 
 @app.put("/upload/")
 async def upload_dataset(
     file: UploadFile = File(...),
     user_id: str = Form(...),
-    mongodb_database = Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio)
+    mongodb_database=Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio),
 ):
     data_collection = mongodb_database.get_collection("data")
     # Check if file with the same name already exists
@@ -325,21 +328,24 @@ async def upload_dataset(
             file.filename,
             data=file_stream,
             length=len(content),
-            content_type=file.content_type
+            content_type=file.content_type,
         )
 
-        await data_collection.insert_one({
-            "dataset_name": file.filename,
-            "content_type": file.content_type,
-            "size": len(content),
-            "user_id": user_id
-        })
+        await data_collection.insert_one(
+            {
+                "dataset_name": file.filename,
+                "content_type": file.content_type,
+                "size": len(content),
+                "user_id": user_id,
+            }
+        )
 
         return {"dataset_name": file.filename}
     except S3Error as err:
-        raise HTTPException(status_code=500, detail=f"MinIO error: {err}")
+        raise HTTPException(status_code=500, detail=f"MinIO error: {err}") from err
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
 
 @app.post("/cluster/")
 async def start_clustering(
@@ -348,7 +354,7 @@ async def start_clustering(
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
     user_id: str = Form(...),
-    params: str = Form("{}")
+    params: str = Form("{}"),
 ):
     try:
         created_timestamp = datetime.now(TIMEZONE).isoformat()
@@ -356,7 +362,7 @@ async def start_clustering(
         params_dict = json.loads(params) if isinstance(params, str) else params
 
         # print(f"Starting clustering job: module={module_name}, class={class_name}")
-        
+
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
@@ -364,7 +370,7 @@ async def start_clustering(
             clustering_algorithm,
             preprocess,
             user_id,
-            **params_dict
+            **params_dict,
         )
 
         return {
@@ -374,29 +380,30 @@ async def start_clustering(
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
-            "params": params_dict
+            "params": params_dict,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
+
 
 @app.get("/datasets/")
-async def list_datasets(mongodb_database = Depends(get_mongodb)):
+async def list_datasets(mongodb_database=Depends(get_mongodb)):
     """
     Returns a list of all uploaded datasets with their user IDs.
     """
     data_collection = mongodb_database.get_collection("data")
-    datasets = await data_collection.find(
-        {}, 
-        {"_id": 0, "dataset_name": 1, "user_id": 1}
-    ).to_list(length=1000)
+    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1, "user_id": 1}).to_list(
+        length=1000
+    )
     return datasets
+
 
 @app.delete("/datasets/{dataset_name}")
 async def delete_dataset(
     dataset_name: str,
-    mongodb_database = Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio)
-    ):
+    mongodb_database=Depends(get_mongodb),
+    minio_client: Minio = Depends(get_minio),
+):
     """
     Deletes a dataset from MongoDB and MinIO.
     """
@@ -411,11 +418,9 @@ async def delete_dataset(
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+
 @app.get("/debug/job/{job_id}")
-async def debug_job(
-    job_id: str,
-    mongodb_database = Depends(get_mongodb)
-    ):
+async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
     """
     Debug endpoint to check job status and results
     """
@@ -425,20 +430,17 @@ async def debug_job(
         task_info = {
             "task_id": task.id,
             "status": task.status,
-            "result": task.result if task.ready() else None
+            "result": task.result if task.ready() else None,
         }
-        
+
         # Check MongoDB
         results_collection = mongodb_database.get_collection("results")
         stored_result = await results_collection.find_one({"job_id": job_id})
-        
-        return {
-            "task_info": task_info,
-            "stored_result": stored_result is not None
-        }
+
+        return {"task_info": task_info, "stored_result": stored_result is not None}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}") from e
+
 
 @app.post("/automl/cluster")
 def start_automl_dummy():

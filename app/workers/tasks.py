@@ -1,14 +1,30 @@
-from .celery_conn import celery
 from datetime import datetime
+
 import pytz
 from clustering import wrappers
 
+from .celery_conn import celery
+
 TIMEZONE = pytz.timezone("UTC")
 
-ALGORITHM_MAP = {getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith('Wrapper')}
+ALGORITHM_MAP = {
+    getattr(wrappers, algo).backend_name: getattr(wrappers, algo)
+    for algo in dir(wrappers)
+    if algo.endswith("Wrapper")
+}
+
 
 @celery.task(bind=True)
-def run_clustering_job(self, dataset_name, columns, created_timestamp, clustering_algorithm, preprocess, user_id, **params):
+def run_clustering_job(
+    self,
+    dataset_name,
+    columns,
+    created_timestamp,
+    clustering_algorithm,
+    preprocess,
+    user_id,
+    **params,
+):
     try:
         print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
         started_timestamp = datetime.now(TIMEZONE).isoformat()
