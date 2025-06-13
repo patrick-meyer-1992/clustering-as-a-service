@@ -13,3 +13,4 @@ streamlit
 minio
 celery[redis,rabbitmq]
 python-multipart
+pytest-playwright
