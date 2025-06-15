@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
+from clustering import wrappers
 
 app = FastAPI()
 BUCKET_NAME = "caas-data"
@@ -150,6 +151,29 @@ async def get_dataset(
         raise HTTPException(status_code=404, detail=f"MinIO error: {err}") from err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+        
+
+@app.get("/default-params/{algorithm_name}")
+def get_default_params(algorithm_name: str):
+    """
+    Returns default parameters for a given clustering algorithm.
+
+    The algorithm is identified by its backend_name, e.g., 'kmeans', 'dbscan', etc.
+    """
+    try:
+        # Iterate over all wrapper classes defined in wrappers
+        for attr in dir(wrappers):
+            if attr.endswith("Wrapper"):
+                wrapper_class = getattr(wrappers, attr)
+                if wrapper_class.backend_name == algorithm_name:
+                    return wrapper_class.get_default_params()
+
+        # If no matching algorithm is found, raise 404 error
+        raise HTTPException(status_code=404, detail=f"Algorithm '{algorithm_name}' not found.")
+    
+    except Exception as e:
+        # Catch any unexpected error and raise it as a 500 error
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Get clustering result by task_id | Forwarding results to the frontend

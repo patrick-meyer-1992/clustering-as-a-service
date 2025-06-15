@@ -35,6 +35,10 @@ class AffinityPropagationWrapper(BaseClustering):
             "verbose": params.get("verbose", False),
         }
 
+    @staticmethod
+    def get_default_params():
+        return AffinityPropagation().get_params()
+
     def run(self, data):
         try:
             print(f"Running AffinityPropagation with params: {self.params}")
@@ -72,6 +76,10 @@ class AgglomerativeClusteringWrapper(BaseClustering):
         self.params["linkage"] = linkage
         self.params["affinity"] = affinity
 
+    @staticmethod
+    def get_default_params():
+        return AgglomerativeClustering().get_params()
+
     def run(self, data):
         try:
             print(f"Running Agglomerative with params: {self.params}")
@@ -104,6 +112,10 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
         super().__init__(dataset_name, columns, **params)
         self.params["n_components"] = n_components
         self.transform_type = self.params.pop("transform_type", None)
+
+    @staticmethod
+    def get_default_params():
+        return BayesianGaussianMixture().get_params()
 
     def prepare_data(self, data):
         # First apply standard scaling and normalization from the base class
@@ -150,6 +162,10 @@ class BIRCHWrapper(BaseClustering):
         self.params["threshold"] = threshold
         self.params.update(params)
 
+    @staticmethod
+    def get_default_params():
+        return Birch().get_params()
+
     def run(self, data):
         try:
             print(f"Running BIRCH with params: {self.params}")
@@ -183,6 +199,10 @@ class BisectingKMeansWrapper(BaseClustering):
         super().__init__(dataset_name, columns)
         self.params["n_clusters"] = n_clusters
         self.params.update(params)
+
+    @staticmethod
+    def get_default_params():
+        return BisectingKMeans().get_params()
 
     def run(self, data):
         try:
@@ -218,6 +238,10 @@ class DBSCANWrapper(BaseClustering):
         self.params["min_samples"] = min_samples
         self.params.update(params)
 
+    @staticmethod
+    def get_default_params():
+        return DBSCAN().get_params()
+
     def run(self, data):
         try:
             print(f"Running DBSCAN with params: {self.params}")
@@ -245,6 +269,10 @@ class GaussianMixtureWrapper(BaseClustering):
         super().__init__(dataset_name, columns, **params)
         self.params["n_components"] = n_components
         self.transform_type = self.params.pop("transform_type", None)
+
+    @staticmethod
+    def get_default_params():
+        return GaussianMixture().get_params()
 
     def prepare_data(self, data):
         # First apply standard scaling and normalization from the base class
@@ -289,6 +317,10 @@ class KMeansWrapper(BaseClustering):
         self.params["n_clusters"] = n_clusters
         self.params.update(params)  # Weitere Parameter hinzufügen
 
+    @staticmethod
+    def get_default_params():
+        return KMeans().get_params()
+
     def run(self, data):
         try:
             print(f"Running KMeans with params: {self.params}")
@@ -322,6 +354,10 @@ class MeanShiftWrapper(BaseClustering):
         self.params["bandwidth"] = bandwidth
         self.params.update(params)
 
+    @staticmethod
+    def get_default_params():
+        return MeanShift().get_params()
+
     def run(self, data):
         try:
             print(f"Running MeanShift with params: {self.params}")
@@ -354,6 +390,10 @@ class MiniBatchKMeansWrapper(BaseClustering):
         self.params["n_clusters"] = n_clusters
         self.params["batch_size"] = batch_size
         self.params.update(params)
+
+    @staticmethod
+    def get_default_params():
+        return MiniBatchKMeans().get_params()
 
     def run(self, data):
         try:
@@ -389,6 +429,10 @@ class OPTICSWrapper(BaseClustering):
         self.params["max_eps"] = max_eps
         self.params.update(params)
 
+    @staticmethod
+    def get_default_params():
+        return OPTICS().get_params()
+
     def run(self, data):
         try:
             print(f"Running OPTICS with params: {self.params}")
@@ -423,6 +467,10 @@ class SpectralClusteringWrapper(BaseClustering):
         super().__init__(dataset_name, columns)
         self.params["n_clusters"] = n_clusters
         self.params.update(params)
+
+    @staticmethod
+    def get_default_params():
+        return SpectralClustering().get_params()
 
     def run(self, data):
         try:
