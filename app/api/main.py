@@ -151,7 +151,7 @@ async def get_dataset(
         raise HTTPException(status_code=404, detail=f"MinIO error: {err}") from err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-        
+
 
 @app.get("/default-params/{algorithm_name}")
 def get_default_params(algorithm_name: str):
@@ -174,6 +174,28 @@ def get_default_params(algorithm_name: str):
     except Exception as e:
         # Catch any unexpected error and raise it as a 500 error
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/effective-params/")
+def get_effective_params(req: JobRequest):
+    """
+    Returns the effective parameters for a given clustering job request.
+
+    Combines the algorithm's default parameters with any user-specified overrides.
+    """
+    wrapper_cls = get_wrapper_by_backend_name(req.clustering_algorithm)
+    if wrapper_cls is None:
+        raise HTTPException(status_code=400, detail="Unsupported algorithm")
+
+    default_params = wrapper_cls.get_default_params()
+
+    try:
+        user_params = json.loads(req.params)
+    except Exception:
+        user_params = {}
+
+    effective = {**default_params, **user_params}
+
+    return {"effective_params": effective}
 
 
 # Get clustering result by task_id | Forwarding results to the frontend
