@@ -33,6 +33,7 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: caas-rabbitmq
+    hostname: rabbitmq
     restart: always
     ports:
       - 5672:5672
@@ -40,10 +41,15 @@ services:
     env_file:
       - ./message_broker/.env
     volumes:
-      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-lib:/var/lib/rabbitmq
       - rabbitmq-log:/var/log/rabbitmq
+      - type: bind
+        source: ./message_broker/.erlang.cookie
+        target: /var/lib/rabbitmq/.erlang.cookie
+        read_only: true
+    user: rabbitmq
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      test: rabbitmq-diagnostics ping
       interval: 10s
       timeout: 5s
       retries: 5
