@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
+from workers.tasks import ALGORITHM_MAP
 from clustering import wrappers
 
 app = FastAPI()
@@ -101,8 +102,15 @@ def post_job(req: JobRequest):
     # TODO:
     # Validate the request
     # Check if the dataset URL is valid and dataset exists
+    
+
+
+
     # Check if the columns are valid
     # Check if the clustering algorithm is supported
+    if req.clustering_algorithm.lower() not in ALGORITHM_MAP:
+    raise HTTPException(status_code=400, detail=f"Unsupported clustering algorithm: {req.clustering_algorithm}")
+
     # Check if the user ID is valid
     # Check if the params are valid
 
