@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import plotly.express as px
 import pytz
+import requests
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from minio import Minio
@@ -102,10 +103,15 @@ def post_job(req: JobRequest):
     # TODO:
     # Validate the request
     # Check if the dataset URL is valid and dataset exists
-    
+    url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/{req.dataset_name}"
 
-
-
+    try:
+        response = requests.head(url)
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Dataset not found or URL not reachable.")
+    except requests.exceptions.RequestException:
+        raise HTTPException(status_code=400, detail="Dataset URL is invalid or server is unreachable.")
+   
     # Check if the columns are valid
     # Check if the clustering algorithm is supported
     if req.clustering_algorithm.lower() not in ALGORITHM_MAP:
