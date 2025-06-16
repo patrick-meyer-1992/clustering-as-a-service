@@ -41,6 +41,10 @@ def run_clustering_job(
         data = clustering.load_data()
         data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
+
+        # Debugging: Logge die generierten Ergebnisse
+        print(f"Generated results for job_id {job_id}: {result}")
+
         clustering.save_results(result, job_id, created_timestamp, started_timestamp, user_id)
 
     except Exception as e:
