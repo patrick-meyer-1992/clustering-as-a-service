@@ -86,18 +86,6 @@ services:
     ports:
       - '6379:6379'
 
-  minio:
-    image: minio/minio:latest
-    container_name: caas-minio
-    ports:
-      - "6000:9000"
-      - "6001:9001"
-    env_file:
-      - ./object_storage/.env
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
-
   automl-worker:
     container_name: caas-automl_worker
     build:

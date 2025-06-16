@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import pytz
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -133,22 +134,31 @@ def post_job(req: JobRequest):
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(
-    dataset_name: str, background_tasks: BackgroundTasks, minio_client: Minio = Depends(get_minio)
+    dataset_name: str, mongodb_database=Depends(get_mongodb)
 ):
     try:
-        minio_response = minio_client.get_object(BUCKET_NAME, dataset_name)
-        background_tasks.add_task(minio_response.close)
-        background_tasks.add_task(minio_response.release_conn)
+        # Debugging: Logge den übergebenen dataset_name
+        print(f"Retrieving dataset: {dataset_name}")
+
+        # Hole den Datensatz aus MongoDB
+        data_collection = mongodb_database.get_collection("data")
+        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        # Debugging: Logge die abgerufenen Daten
+        print(f"Dataset retrieved: {dataset}")
+
+        # Erstelle einen StreamingResponse für die CSV-Daten
+        file_stream = io.StringIO(dataset["data"])
         return StreamingResponse(
-            minio_response,
+            file_stream,
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={dataset_name}"},
-            background=background_tasks,
         )
-
-    except S3Error as err:
-        raise HTTPException(status_code=404, detail=f"MinIO error: {err}") from err
     except Exception as e:
+        print(f"Error retrieving dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
@@ -159,77 +169,59 @@ async def get_clustering_result(
     presentation: str = Query("table", enum=["table", "raw", "graph"]),
     mongodb_database=Depends(get_mongodb),
 ):
-    # get result from MongoDB
-    result_collection = mongodb_database.get_collection("results")
-    result = await result_collection.find_one({"job_id": task_id})
+    try:
+        # Debugging: Logge die übergebene job_id
+        print(f"Retrieving clustering result for job_id: {task_id}")
 
-    # Check if result exists
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
+        # Hole das Ergebnis aus MongoDB
+        result_collection = mongodb_database.get_collection("results")
+        result = await result_collection.find_one({"job_id": task_id})
 
-    # get metadata and additional results
-    additional = result.get("additional_results", {})
-    labels = result.get("labels")
-    X = additional.get("X")
-    columns = additional.get("columns")
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
 
-    # table presentation
-    if presentation == "table":
-        if X is not None and columns is not None:
-            df = []
-            for row, label in zip(X, labels, strict=False):
-                row_dict = {col: val for col, val in zip(columns, row, strict=False)}
-                row_dict["Cluster"] = label
-                df.append(row_dict)
-            return {"data": df, "columns": columns + ["Cluster"]}
-        else:
-            return {"labels": labels}
+        # Debugging: Logge die abgerufenen Ergebnisse
+        print(f"Clustering result retrieved: {result}")
 
-    # raw presentation
-    if presentation == "raw":
-        return labels
+        # Verarbeite das Ergebnis basierend auf der Präsentation
+        additional = result.get("additional_results", {})
+        labels = result.get("labels")
+        X = additional.get("X")
+        columns = additional.get("columns")
 
-    # graph presentation
-    if presentation == "graph":
-        if X is None or labels is None or len(X) == 0 or len(labels) == 0:
-            raise HTTPException(status_code=400, detail="No data for plotting")
-        X_np = np.array(X)
-        labels_np = np.array(labels)
-        if X_np.shape[1] < 2:
-            raise HTTPException(status_code=400, detail="Data is not 2D")
-        fig = px.scatter(
-            x=X_np[:, 0],
-            y=X_np[:, 1],
-            color=labels_np.astype(str),
-            title=f"Clustering: {result.get('clustering_algorithm')}",
-        )
-        return fig.to_dict()
+        if presentation == "table":
+            if X is not None and columns is not None:
+                df = []
+                for row, label in zip(X, labels, strict=False):
+                    row_dict = {col: val for col, val in zip(columns, row, strict=False)}
+                    row_dict["Cluster"] = label
+                    df.append(row_dict)
+                return {"data": df, "columns": columns + ["Cluster"]}
+            else:
+                return {"labels": labels}
 
-    raise HTTPException(status_code=400, detail="Invalid presentation type")
-    # res = celery.AsyncResult(task_id)
+        if presentation == "raw":
+            return labels
 
-    # if res.state == "PENDING":
-    #     return {"status": "pending"}
+        if presentation == "graph":
+            if X is None or labels is None or len(X) == 0 or len(labels) == 0:
+                raise HTTPException(status_code=400, detail="No data for plotting")
+            X_np = np.array(X)
+            labels_np = np.array(labels)
+            if X_np.shape[1] < 2:
+                raise HTTPException(status_code=400, detail="Data is not 2D")
+            fig = px.scatter(
+                x=X_np[:, 0],
+                y=X_np[:, 1],
+                color=labels_np.astype(str),
+                title=f"Clustering: {result.get('clustering_algorithm')}",
+            )
+            return fig.to_dict()
 
-    # if res.state == "FAILURE":
-    #     return {"status": "failed", "error": str(res.result)}
-
-    # if res.state == "SUCCESS":
-    #     job_id = res.result.get("job_id")
-    #     label_path = res.result.get("labels_path")
-
-    #     if not label_path or not os.path.exists(label_path):
-    #         raise HTTPException(status_code=404, detail="Labels not found")
-
-    #     labels = np.load(label_path).tolist()
-    #     return {
-    #         "status": "completed",
-    #         "algorithm": res.result.get("algorithm"),
-    #         "job_id": job_id,
-    #         "labels": labels
-    #     }
-
-    # return {"status": res.state}
+        raise HTTPException(status_code=400, detail="Invalid presentation type")
+    except Exception as e:
+        print(f"Error retrieving clustering result: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 @app.put("/dataset/")
@@ -241,38 +233,33 @@ async def put_dataset(
     user_id: str = Form(...),
     params: str = Form("{}"),
     mongodb_database=Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio),
 ):
-    # After data upload, the file is stored in MinIO and a clustering job is started.
-
     try:
-        # Read file content
+        # Lese die Datei und extrahiere die Spaltennamen
         content = await file.read()
-        file_stream = io.BytesIO(content)
+        try:
+            df = pd.read_csv(io.BytesIO(content))
+            columns = df.columns.tolist()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
 
-        # Upload to MinIO
-        minio_client.put_object(
-            BUCKET_NAME,
-            file.filename,
-            data=file_stream,
-            length=len(content),
-            content_type=file.content_type,
-        )
-
+        # Speichere den Datensatz und die Metadaten in MongoDB
         data_collection = mongodb_database.get_collection("data")
         await data_collection.insert_one(
             {
                 "dataset_name": file.filename,
                 "content_type": file.content_type,
                 "size": len(content),
+                "user_id": user_id,
+                "columns": columns,
+                "data": content.decode("utf-8"),  # Speichere die CSV-Daten als String
             }
         )
 
-        # start Clustering-Job and forward it to Celery
+        # Starte den Clustering-Job und leite ihn an Celery weiter
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         params_dict = json.loads(params) if isinstance(params, str) else params
 
-        # run_clustering_job is a Celery task that processes the clustering job, returning a job ID.
         job = run_clustering_job.delay(
             file.filename,
             columns,
@@ -285,25 +272,28 @@ async def put_dataset(
 
         return {
             "dataset_name": file.filename,
-            "job_id": job.id,  # This is the Celery job ID
+            "job_id": job.id,  # Dies ist die Celery-Job-ID
             "columns": columns,
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
             "params": params_dict,
         }
-
-    except S3Error as err:
-        raise HTTPException(status_code=500, detail=f"MinIO error: {err}") from err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 @app.post("/result/")
 async def post_result(req: ResultPutRequest, mongodb_database=Depends(get_mongodb)):
-    result_collection = mongodb_database.get_collection("results")
-    await result_collection.insert_one(req.model_dump())
-    return {"job_id": req.job_id}
+    try:
+        result_collection = mongodb_database.get_collection("results")
+        # Debugging: Logge die zu speichernden Daten
+        print(f"Saving result: {req.model_dump()}")
+        await result_collection.insert_one(req.model_dump())
+        return {"job_id": req.job_id}
+    except Exception as e:
+        print(f"Error saving result: {e}")
+        raise HTTPException(status_code=500, detail=f"Error saving result: {e}") from e
 
 
 @app.put("/upload/")
@@ -311,7 +301,6 @@ async def upload_dataset(
     file: UploadFile = File(...),
     user_id: str = Form(...),
     mongodb_database=Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio),
 ):
     data_collection = mongodb_database.get_collection("data")
     # Check if file with the same name already exists
@@ -320,29 +309,29 @@ async def upload_dataset(
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
         content = await file.read()
-        file_stream = io.BytesIO(content)
+        # Parse the CSV file to extract column names
+        try:
+            df = pd.read_csv(io.BytesIO(content))
+            columns = df.columns.tolist()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
 
-        # Upload to MinIO
-        minio_client.put_object(
-            BUCKET_NAME,
-            file.filename,
-            data=file_stream,
-            length=len(content),
-            content_type=file.content_type,
-        )
+        # Debugging: Logge die zu speichernden Daten
+        print(f"Saving dataset: {file.filename}, columns: {columns}")
 
+        # Store the dataset and metadata in MongoDB
         await data_collection.insert_one(
             {
                 "dataset_name": file.filename,
                 "content_type": file.content_type,
                 "size": len(content),
                 "user_id": user_id,
+                "columns": columns,
+                "data": content.decode("utf-8"),  # Store the CSV content as a string
             }
         )
 
-        return {"dataset_name": file.filename}
-    except S3Error as err:
-        raise HTTPException(status_code=500, detail=f"MinIO error: {err}") from err
+        return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
@@ -402,17 +391,13 @@ async def list_datasets(mongodb_database=Depends(get_mongodb)):
 async def delete_dataset(
     dataset_name: str,
     mongodb_database=Depends(get_mongodb),
-    minio_client: Minio = Depends(get_minio),
 ):
     """
-    Deletes a dataset from MongoDB and MinIO.
+    Löscht einen Datensatz aus MongoDB.
     """
     data_collection = mongodb_database.get_collection("data")
     result = await data_collection.delete_one({"dataset_name": dataset_name})
-    try:
-        minio_client.remove_object(BUCKET_NAME, dataset_name)
-    except Exception:
-        pass  # Ignore if file does not exist in MinIO
+
     if result.deleted_count == 1:
         return {"detail": "Dataset deleted"}
     else:
