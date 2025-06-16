@@ -115,7 +115,7 @@ def post_job(req: JobRequest):
     # Check if the columns are valid
     # Check if the clustering algorithm is supported
     if req.clustering_algorithm.lower() not in ALGORITHM_MAP:
-    raise HTTPException(status_code=400, detail=f"Unsupported clustering algorithm: {req.clustering_algorithm}")
+        raise HTTPException(status_code=400, detail=f"Unsupported clustering algorithm: {req.clustering_algorithm}")
 
     # Check if the user ID is valid
     # Check if the params are valid
