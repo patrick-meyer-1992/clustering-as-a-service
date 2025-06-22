@@ -117,9 +117,9 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
     def get_default_params():
         return BayesianGaussianMixture().get_params()
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, preprocess=True):
         # First apply standard scaling and normalization from the base class
-        data = super().prepare_data(data)
+        data = super().prepare_data(data, preprocess)
 
         if self.transform_type == "quantile":
             transformer = QuantileTransformer(output_distribution="normal")
@@ -274,9 +274,9 @@ class GaussianMixtureWrapper(BaseClustering):
     def get_default_params():
         return GaussianMixture().get_params()
 
-    def prepare_data(self, data):
+    def prepare_data(self, data, preprocess=True):
         # First apply standard scaling and normalization from the base class
-        data = super().prepare_data(data)
+        data = super().prepare_data(data, preprocess)
 
         if self.transform_type == "quantile":
             transformer = QuantileTransformer(output_distribution="normal")
