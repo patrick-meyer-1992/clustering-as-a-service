@@ -8,10 +8,8 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
-from minio import Minio
-from minio.error import S3Error
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
@@ -46,26 +44,6 @@ async def get_mongodb():
         yield mongodb_database
     finally:
         await mongodb_client.close()
-
-
-async def get_minio():
-    MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
-    MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
-    MINIO_HOST = os.getenv("MINIO_HOST")
-    MINIO_PORT = os.getenv("MINIO_PORT")
-
-    # Configure MinIO client
-    minio_client = Minio(
-        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",
-        access_key=MINIO_ACCESS_KEY,
-        secret_key=MINIO_SECRET_KEY,
-        secure=False,
-    )
-    # Ensure the bucket exists
-    if not minio_client.bucket_exists(BUCKET_NAME):
-        minio_client.make_bucket(BUCKET_NAME)
-
-    yield minio_client
 
 
 class JobRequest(BaseModel):
@@ -133,16 +111,16 @@ def post_job(req: JobRequest):
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
-async def get_dataset(
-    dataset_name: str, mongodb_database=Depends(get_mongodb)
-):
+async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
     try:
         # Debugging: Logge den übergebenen dataset_name
         print(f"Retrieving dataset: {dataset_name}")
 
         # Hole den Datensatz aus MongoDB
         data_collection = mongodb_database.get_collection("data")
-        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+        dataset = await data_collection.find_one(
+            {"dataset_name": dataset_name}, {"_id": 0, "data": 1}
+        )
 
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
@@ -178,7 +156,9 @@ async def get_clustering_result(
         result = await result_collection.find_one({"job_id": task_id})
 
         if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
 
         # Debugging: Logge die abgerufenen Ergebnisse
         print(f"Clustering result retrieved: {result}")
@@ -241,7 +221,7 @@ async def put_dataset(
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Speichere den Datensatz und die Metadaten in MongoDB
         data_collection = mongodb_database.get_collection("data")
@@ -314,7 +294,7 @@ async def upload_dataset(
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Debugging: Logge die zu speichernden Daten
         print(f"Saving dataset: {file.filename}, columns: {columns}")

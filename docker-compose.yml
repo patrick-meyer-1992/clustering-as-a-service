@@ -105,5 +105,3 @@ volumes:
     driver: local
   mongodb-data:
     driver: local
-  minio-data:
-    driver: local
