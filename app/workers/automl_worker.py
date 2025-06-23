@@ -13,9 +13,9 @@ from autocluster import MetafeatureMapper
 from .celery_conn import celery
 
 # Environment variables (wie in deiner Base-Klasse)
-fastapi_host = os.getenv("FASTPI_HOST")
-fastapi_port = os.getenv("FASTAPI_PORT")
-fastapi_protocol = os.getenv("FASTAPI_PROTOCOL")
+fastapi_host = os.getenv("FASTAPI_HOST", "caas-fastapi")
+fastapi_port = int(os.getenv("FASTAPI_PORT", "8000"))
+fastapi_protocol = os.getenv("FASTAPI_PROTOCOL", "http")
 
 TIMEZONE = pytz.timezone("UTC")
 
@@ -28,6 +28,7 @@ def run_autocluster(self, *, dataset_name, columns, user_id):
     try:
         # === Daten laden ===
         url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/{dataset_name}"
+        url = "http://caas-fastapi:8000/dataset/iris.csv"
         print(f"[AutoML] Lade Daten von {url}")
         response = requests.get(url)
         response.raise_for_status()

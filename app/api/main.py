@@ -13,8 +13,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
-from workers.tasks import run_clustering_job
-from workers.automl_worker import run_autocluster
 
 app = FastAPI()
 BUCKET_NAME = "caas-data"
@@ -448,20 +446,17 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
 
 
 @app.post("/automl/cluster")
-async def start_automl(
-    dataset_name: str = Form(...),
-    columns: str = Form(...), 
-    user_id: str = Form(...),
-):
+async def start_automl(dataset_name: str = Form(...), columns: str = Form(...), user_id: str = Form(...)):
     try:
-        created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
 
-        # Starte AutoML Job
-        job = run_autocluster.delay(
-            dataset_name=dataset_name,
-            columns=columns_list,
-            user_id=user_id,
+        job = celery.send_task(
+            "automl_worker.run_autocluster",
+            kwargs={
+                "dataset_name": dataset_name,
+                "columns": columns_list,
+                "user_id": user_id,
+            }
         )
 
         return {
