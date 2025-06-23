@@ -10,8 +10,6 @@ import plotly.express as px
 import pytz
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
-from minio import Minio
-from minio.error import S3Error
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
@@ -46,27 +44,6 @@ async def get_mongodb():
         yield mongodb_database
     finally:
         await mongodb_client.close()
-
-
-async def get_minio():
-    MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER")
-    MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD")
-    MINIO_HOST = os.getenv("MINIO_HOST")
-    MINIO_PORT = os.getenv("MINIO_PORT")
-
-    # Configure MinIO client
-    minio_client = Minio(
-        endpoint=f"{MINIO_HOST}:{MINIO_PORT}",
-        access_key=MINIO_ACCESS_KEY,
-        secret_key=MINIO_SECRET_KEY,
-        secure=False,
-    )
-    # Ensure the bucket exists
-    if not minio_client.bucket_exists(BUCKET_NAME):
-        minio_client.make_bucket(BUCKET_NAME)
-
-    yield minio_client
-
 
 class JobRequest(BaseModel):
     dataset_name: str
