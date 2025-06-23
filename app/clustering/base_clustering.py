@@ -97,6 +97,16 @@ class BaseClustering(ABC):
 
         return X_scaled
 
+    from abc import ABC, abstractmethod
+    
+    @staticmethod
+    @abstractmethod
+    def get_default_params():
+        """
+        Must return a dictionary of default parameters.
+        """
+        pass
+
     @abstractmethod
     def run(self, data):
         # Abstract method to run the clustering algorithm

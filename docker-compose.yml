@@ -11,7 +11,6 @@ services:
       - ./app/api/:/app/api # For hot reload
     env_file:
       - ./message_broker/.env
-      - ./object_storage/.env
       - ./redis/.env
       - ./mongodb/.env
     environment:
@@ -33,6 +32,7 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: caas-rabbitmq
+    hostname: rabbitmq
     restart: always
     ports:
       - 5672:5672
@@ -40,10 +40,15 @@ services:
     env_file:
       - ./message_broker/.env
     volumes:
-      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-lib:/var/lib/rabbitmq
       - rabbitmq-log:/var/log/rabbitmq
+      - type: bind
+        source: ./message_broker/.erlang.cookie
+        target: /var/lib/rabbitmq/.erlang.cookie
+        read_only: true
+    user: rabbitmq
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      test: rabbitmq-diagnostics ping
       interval: 10s
       timeout: 5s
       retries: 5
@@ -80,18 +85,6 @@ services:
     ports:
       - '6379:6379'
 
-  minio:
-    image: minio/minio:latest
-    container_name: caas-minio
-    ports:
-      - "6000:9000"
-      - "6001:9001"
-    env_file:
-      - ./object_storage/.env
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio-data:/data
-
   automl-worker:
     container_name: caas-automl_worker
     build:
@@ -110,6 +103,4 @@ volumes:
   rabbitmq-log:
     driver: local
   mongodb-data:
-    driver: local
-  minio-data:
     driver: local

@@ -185,15 +185,34 @@ if st.session_state["dataset_name"]:
                 st.session_state["job_id"] = job_id
                 st.success(f"Clustering gestartet! Job-ID: {job_id}")
 
-                # Warte kurz auf Ergebnisse
-                st.info("Verarbeite Daten...")
-                time.sleep(2)
+                # Fortschrittsanzeige
+                status_placeholder = st.empty()
+                progress = 0
+                max_wait = 120  # max 2 Minuten warten
+                poll_interval = 2  # alle 2 Sekunden abfragen
 
-                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}")
-                if result_check.status_code == 200:
-                    st.success("Clustering erfolgreich abgeschlossen!")
+                for i in range(max_wait // poll_interval):
+                    debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
+                    if debug_resp.status_code == 200:
+                        debug_data = debug_resp.json()
+                        celery_status = debug_data["task_info"]["status"]
+                        if celery_status == "PENDING":
+                            status_placeholder.info("Job ist in der Warteschlange (PENDING)...")
+                        elif celery_status == "STARTED":
+                            status_placeholder.info("Clustering läuft (STARTED)...")
+                        elif celery_status == "SUCCESS":
+                            status_placeholder.success("Clustering abgeschlossen!")
+                            break
+                        elif celery_status == "FAILURE":
+                            status_placeholder.error("Clustering fehlgeschlagen!")
+                            break
+                        else:
+                            status_placeholder.warning(f"Status: {celery_status}")
+                    else:
+                        status_placeholder.warning("Status konnte nicht abgefragt werden.")
+                    time.sleep(poll_interval)
                 else:
-                    st.error("Clustering konnte nicht erfolgreich durchgeführt werden.")
+                    status_placeholder.warning("Timeout: Clustering hat zu lange gedauert.")
             else:
                 st.error("Fehler beim Starten des Clusterings")
         except Exception as e:
@@ -204,24 +223,76 @@ if st.session_state["dataset_name"]:
 # The user can enter the Job-ID to retrieve the results.
 st.subheader("Ergebnisse anzeigen")
 
-# enter Job-ID (Upload or manuel)
-input_job_id = st.text_input("Job-ID eingeben", value=st.session_state["job_id"])
+# Auswahlmodus für die Job-Auswahl
+job_select_mode = st.radio(
+    "Job auswählen",
+    ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"]
+)
+
+input_job_id = ""
+if job_select_mode == "Manuelle Eingabe":
+    input_job_id = st.text_input("Job-ID eingeben", value=st.session_state.get("job_id", ""))
+elif job_select_mode == "Aktuellen Job anzeigen":
+    # Zeige den aktuellsten Job aus dem Session-State
+    input_job_id = st.session_state.get("job_id", "")
+    if input_job_id:
+        st.info(f"Aktueller Job: {input_job_id}")
+    else:
+        st.warning("Kein aktueller Job vorhanden.")
+elif job_select_mode == "Job-Historie":
+    def get_job_list():
+        try:
+            resp = requests.get(f"{FASTAPI_URL}/jobs/")
+            if resp.status_code == 200:
+                jobs = resp.json()
+                # Status für jeden Job live abfragen
+                for job in jobs:
+                    job_id = job.get("job_id")
+                    if job_id:
+                        debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
+                        if debug_resp.status_code == 200:
+                            celery_status = debug_resp.json()["task_info"]["status"]
+                            job["status"] = celery_status
+                return jobs
+            else:
+                return []
+        except Exception:
+            return []
+    job_list = get_job_list()
+    job_options = []
+    job_id_to_label = {}
+    if job_list:
+        # Sortiere die Liste so, dass die neuesten Jobs zuerst stehen
+        job_list = sorted(job_list, key=lambda job: job.get("created_timestamp", ""), reverse=True)
+        for job in job_list:
+            label = f"{job['job_id']} | {job['dataset_name']} | {job['clustering_algorithm']} | {job['status']}"
+            job_options.append(label)
+            job_id_to_label[label] = job["job_id"]
+        selected_label = st.selectbox(
+            "Vorherigen Job auswählen:",
+            options=job_options,
+        )
+        input_job_id = job_id_to_label[selected_label]
+    else:
+        st.info("Keine Jobs vorhanden.")
 
 presentation = st.selectbox(
     "Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"]
 )
 
-# get results over GET cluster function of FastAPI
 if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
+    mapping = {
+        "Tabelle": "table",
+        "Rohdaten": "raw",
+        "Graph": "graph"
+    }
     pres = mapping[presentation]
-
-    # get data for presentation as requiered
-    url = f"{FASTAPI_URL}/cluster/{input_job_id}?presentation={pres}"
+    url = f"{FASTAPI_URL}/cluster/{input_job_id}/{pres}"
     try:
         resp = requests.get(url)
         if resp.status_code == 200:
             data = resp.json()
+            # Präsentation auf voller Breite
             if pres == "table":
                 if "data" in data and "columns" in data:
                     df = pd.DataFrame(data["data"], columns=data["columns"])
@@ -237,7 +308,7 @@ if st.button("Ergebnis anzeigen") and input_job_id:
                 if not fig.data:
                     st.warning("Keine Daten für Plot vorhanden.")
                 else:
-                    st.plotly_chart(fig)
+                    st.plotly_chart(fig, use_container_width=True)
         else:
             try:
                 msg = resp.json().get("detail", resp.text)
