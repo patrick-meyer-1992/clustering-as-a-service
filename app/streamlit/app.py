@@ -185,15 +185,34 @@ if st.session_state["dataset_name"]:
                 st.session_state["job_id"] = job_id
                 st.success(f"Clustering gestartet! Job-ID: {job_id}")
 
-                # Warte kurz auf Ergebnisse
-                st.info("Verarbeite Daten...")
-                time.sleep(2)
+                # Fortschrittsanzeige
+                status_placeholder = st.empty()
+                progress = 0
+                max_wait = 120  # max 2 Minuten warten
+                poll_interval = 2  # alle 2 Sekunden abfragen
 
-                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}/table")
-                if result_check.status_code == 200:
-                    st.success("Clustering erfolgreich abgeschlossen!")
+                for i in range(max_wait // poll_interval):
+                    debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
+                    if debug_resp.status_code == 200:
+                        debug_data = debug_resp.json()
+                        celery_status = debug_data["task_info"]["status"]
+                        if celery_status == "PENDING":
+                            status_placeholder.info("Job ist in der Warteschlange (PENDING)...")
+                        elif celery_status == "STARTED":
+                            status_placeholder.info("Clustering läuft (STARTED)...")
+                        elif celery_status == "SUCCESS":
+                            status_placeholder.success("Clustering abgeschlossen!")
+                            break
+                        elif celery_status == "FAILURE":
+                            status_placeholder.error("Clustering fehlgeschlagen!")
+                            break
+                        else:
+                            status_placeholder.warning(f"Status: {celery_status}")
+                    else:
+                        status_placeholder.warning("Status konnte nicht abgefragt werden.")
+                    time.sleep(poll_interval)
                 else:
-                    st.error("Clustering konnte nicht erfolgreich durchgeführt werden.")
+                    status_placeholder.warning("Timeout: Clustering hat zu lange gedauert.")
             else:
                 st.error("Fehler beim Starten des Clusterings")
         except Exception as e:
