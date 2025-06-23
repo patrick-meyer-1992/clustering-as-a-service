@@ -422,3 +422,31 @@ async def get_clustering_result_graph(
         return fig.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
+
+@app.get("/jobs/")
+async def list_jobs(mongodb_database=Depends(get_mongodb)):
+    """
+    Gibt eine Übersicht aller bekannten Jobs inkl. Status zurück.
+    """
+    try:
+        results_collection = mongodb_database.get_collection("results")
+        jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
+        job_list = []
+        for job in jobs:
+            job_id = job.get("job_id")
+            celery_status = None
+            if job_id:
+                task = celery.AsyncResult(job_id)
+                celery_status = task.status
+            job_list.append({
+                "job_id": job_id,
+                "dataset_name": job.get("dataset_name"),
+                "created_timestamp": job.get("created_timestamp"),
+                "clustering_algorithm": job.get("clustering_algorithm"),
+                "user_id": job.get("user_id"),
+                "status": celery_status,
+            })
+        return job_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e

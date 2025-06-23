@@ -223,14 +223,63 @@ if st.session_state["dataset_name"]:
 # The user can enter the Job-ID to retrieve the results.
 st.subheader("Ergebnisse anzeigen")
 
-# enter Job-ID (Upload or manuel)
-input_job_id = st.text_input("Job-ID eingeben", value=st.session_state["job_id"])
+# Auswahlmodus für die Job-Auswahl
+job_select_mode = st.radio(
+    "Job auswählen",
+    ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"]
+)
+
+input_job_id = ""
+if job_select_mode == "Manuelle Eingabe":
+    input_job_id = st.text_input("Job-ID eingeben", value=st.session_state.get("job_id", ""))
+elif job_select_mode == "Aktuellen Job anzeigen":
+    # Zeige den aktuellsten Job aus dem Session-State
+    input_job_id = st.session_state.get("job_id", "")
+    if input_job_id:
+        st.info(f"Aktueller Job: {input_job_id}")
+    else:
+        st.warning("Kein aktueller Job vorhanden.")
+elif job_select_mode == "Job-Historie":
+    def get_job_list():
+        try:
+            resp = requests.get(f"{FASTAPI_URL}/jobs/")
+            if resp.status_code == 200:
+                jobs = resp.json()
+                # Status für jeden Job live abfragen
+                for job in jobs:
+                    job_id = job.get("job_id")
+                    if job_id:
+                        debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
+                        if debug_resp.status_code == 200:
+                            celery_status = debug_resp.json()["task_info"]["status"]
+                            job["status"] = celery_status
+                return jobs
+            else:
+                return []
+        except Exception:
+            return []
+    job_list = get_job_list()
+    job_options = []
+    job_id_to_label = {}
+    if job_list:
+        # Sortiere die Liste so, dass die neuesten Jobs zuerst stehen
+        job_list = sorted(job_list, key=lambda job: job.get("created_timestamp", ""), reverse=True)
+        for job in job_list:
+            label = f"{job['job_id']} | {job['dataset_name']} | {job['clustering_algorithm']} | {job['status']}"
+            job_options.append(label)
+            job_id_to_label[label] = job["job_id"]
+        selected_label = st.selectbox(
+            "Vorherigen Job auswählen:",
+            options=job_options,
+        )
+        input_job_id = job_id_to_label[selected_label]
+    else:
+        st.info("Keine Jobs vorhanden.")
 
 presentation = st.selectbox(
     "Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"]
 )
 
-# get results over GET cluster function of FastAPI
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {
         "Tabelle": "table",
@@ -243,6 +292,7 @@ if st.button("Ergebnis anzeigen") and input_job_id:
         resp = requests.get(url)
         if resp.status_code == 200:
             data = resp.json()
+            # Präsentation auf voller Breite
             if pres == "table":
                 if "data" in data and "columns" in data:
                     df = pd.DataFrame(data["data"], columns=data["columns"])
@@ -258,7 +308,7 @@ if st.button("Ergebnis anzeigen") and input_job_id:
                 if not fig.data:
                     st.warning("Keine Daten für Plot vorhanden.")
                 else:
-                    st.plotly_chart(fig)
+                    st.plotly_chart(fig, use_container_width=True)
         else:
             try:
                 msg = resp.json().get("detail", resp.text)
