@@ -189,7 +189,7 @@ if st.session_state["dataset_name"]:
                 st.info("Verarbeite Daten...")
                 time.sleep(2)
 
-                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}")
+                result_check = requests.get(f"{FASTAPI_URL}/cluster/{job_id}/table")
                 if result_check.status_code == 200:
                     st.success("Clustering erfolgreich abgeschlossen!")
                 else:
@@ -213,11 +213,13 @@ presentation = st.selectbox(
 
 # get results over GET cluster function of FastAPI
 if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
+    mapping = {
+        "Tabelle": "table",
+        "Rohdaten": "raw",
+        "Graph": "graph"
+    }
     pres = mapping[presentation]
-
-    # get data for presentation as requiered
-    url = f"{FASTAPI_URL}/cluster/{input_job_id}?presentation={pres}"
+    url = f"{FASTAPI_URL}/cluster/{input_job_id}/{pres}"
     try:
         resp = requests.get(url)
         if resp.status_code == 200:
