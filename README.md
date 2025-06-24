@@ -52,3 +52,15 @@ In der Datei `pyproject.toml` können in das Array `lint.ignore` IDs von Fehlert
 **Fehler ignorieren**
 
 Wenn der Fehler aktuell nicht behoben werden kann, aber auch nicht als generelle Ausnahme ergänzt werden soll, können die Tests für diesen Commit mit `--no-verify` ausgesetzt werden, z.B. `git commit -m "add new feature" --no-verify`.
+
+
+# Bzgl mongodb storage
+minikube addons enable storage-provisioner
+minikube addons enable default-storageclass
+
+# Secrets apply
+# Helm install mongodb
+helm install mongodb bitnami/mongodb  -f values.yaml
+
+# MongoDB erreichbar machen 
+kubectl port-forward --address=0.0.0.0 svc/mongodb 32480:27017
