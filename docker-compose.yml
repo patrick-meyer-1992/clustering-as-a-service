@@ -95,7 +95,7 @@ services:
       - ./redis/.env
     depends_on:
       - redis
-    restart: always    
+    restart: always
 
 volumes:
   rabbitmq-lib:

@@ -23,4 +23,4 @@ RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
 
-CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info"]
+CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=threads", "--concurrency=1"]

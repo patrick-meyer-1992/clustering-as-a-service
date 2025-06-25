@@ -446,18 +446,28 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
 
 
 @app.post("/automl/cluster")
-async def start_automl(dataset_name: str = Form(...), columns: str = Form(...), user_id: str = Form(...)):
+async def start_automl(
+    dataset_name: str = Form(...), 
+    columns: str = Form(...)
+):
+    
+    print("[AutoML] Received new request on /automl/cluster")
+
     try:
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
+        
+        print(f"[AutoML] Dataset: {dataset_name}")
+        print(f"[AutoML] Columns: {columns_list}")
 
         job = celery.send_task(
             "automl_worker.run_autocluster",
             kwargs={
                 "dataset_name": dataset_name,
-                "columns": columns_list,
-                "user_id": user_id,
+                "columns": columns_list
             }
         )
+
+        print(f"[AutoML] Job started with ID: {job.id}")
 
         return {
             "job_id": job.id,
@@ -475,6 +485,7 @@ async def get_automl_result(
     presentation: str = Query("table", enum=["table", "raw", "graph"]),
     mongodb_database=Depends(get_mongodb)
 ):
+    
     result_collection = mongodb_database.get_collection("results")
     result = await result_collection.find_one({"job_id": job_id, "clustering_algorithm": "AutoCluster"})
 
