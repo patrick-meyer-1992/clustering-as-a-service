@@ -2,7 +2,7 @@ import io
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
-
+import numpy as np
 import pandas as pd
 import pytz
 import requests
@@ -19,9 +19,9 @@ from sklearn.preprocessing import (
 TIMEZONE = pytz.timezone("UTC")
 
 # Environment variables for FastAPI connection
-fastapi_host = os.getenv("FASTPI_HOST")
-fastapi_port = os.getenv("FASTAPI_PORT")
-fastapi_protocol = os.getenv("FASTAPI_PROTOCOL")
+fastapi_host = os.getenv("FASTAPI_HOST") or "caas-fastapi"
+fastapi_port = os.getenv("FASTAPI_PORT") or "8000"
+fastapi_protocol = os.getenv("FASTAPI_PROTOCOL") or "http"
 
 
 class BaseClustering(ABC):
