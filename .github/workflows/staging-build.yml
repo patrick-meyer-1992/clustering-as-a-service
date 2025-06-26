@@ -29,7 +29,7 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: app/fastapi.Dockerfile
+        context: ./app
+        file: fastapi.Dockerfile
         push: true
         tags: patrickmeyer/caas-fastapi:${{ env.SHORT_SHA }}
