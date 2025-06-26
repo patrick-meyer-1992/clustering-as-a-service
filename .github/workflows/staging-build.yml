@@ -30,6 +30,6 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: ./app
-        file: fastapi.Dockerfile
+        file: ./app/fastapi.Dockerfile
         push: true
         tags: patrickmeyer/caas-fastapi:${{ env.SHORT_SHA }}
