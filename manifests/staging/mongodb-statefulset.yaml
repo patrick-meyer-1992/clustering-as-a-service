@@ -22,7 +22,9 @@ spec:
         ports:
         - containerPort: 27017
           name: mongodb
-
+        envFrom:
+        - configMapRef:
+            name: caas-config
         volumeMounts:
         - name: mongodb-data
           mountPath: /caas/data/db

@@ -9,6 +9,3 @@ data:
     db = db.getSiblingDB('caas'); // creates or switches to 'caas'
     db.createCollection('data'); // creates a collection
     db.createCollection('results'); // creates a collection
-  MONGODB_DB: caas
-  MONGODB_HOST: mongodb-service
-  MONGODB_PORT: "27017"
