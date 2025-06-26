@@ -68,7 +68,7 @@ jobs:
         # Update image tags in all services
         for service in api clustering-worker streamlit; do
           cd $service
-          kustomize edit set image patrickmeyer/$service=patrickmeyer/caas-$service:${{ env.SHORT_SHA }}
+          kustomize edit set image patrickmeyer/caas-$service=patrickmeyer/caas-$service:${{ env.SHORT_SHA }}
           cd ..
         done
 
