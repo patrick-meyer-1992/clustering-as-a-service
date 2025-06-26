@@ -9,8 +9,6 @@ data:
     db = db.getSiblingDB('caas'); // creates or switches to 'caas'
     db.createCollection('data'); // creates a collection
     db.createCollection('results'); // creates a collection
-  MONGO_INITDB_ROOT_USERNAME: admin
-  MONGO_INITDB_ROOT_PASSWORD: admin
   MONGODB_DB: caas
   MONGODB_HOST: mongodb-service
   MONGODB_PORT: "27017"
