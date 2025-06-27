@@ -22,8 +22,6 @@ TIMEZONE = pytz.timezone("UTC")
 
 
 async def get_mongodb():
-    MONGODB_USER = os.getenv("MONGODB_USER")
-    MONGODB_PASSWORD = os.getenv("MONGODB_PASSWORD")
     MONGODB_DB = os.getenv("MONGODB_DB")
     MONGODB_HOST = os.getenv("MONGODB_HOST")
     MONGODB_PORT = os.getenv("MONGODB_PORT")
@@ -36,7 +34,7 @@ async def get_mongodb():
         print(f"Using MongoDB URL: {MONGODB_URL}")
     else:
         mongodb_client = AsyncMongoClient(
-            f"mongodb://{MONGODB_USER}:{MONGODB_PASSWORD}@{MONGODB_HOST}:{MONGODB_PORT}"
+            f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}"
         )
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
@@ -108,7 +106,6 @@ def post_job(req: JobRequest):
 
     return response
 
-
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(
     dataset_name: str, mongodb_database=Depends(get_mongodb)
@@ -137,65 +134,6 @@ async def get_dataset(
     except Exception as e:
         print(f"Error retrieving dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
-@app.put("/dataset/")
-async def put_dataset(
-    file: UploadFile = File(...),  # TODO: streaming file
-    columns: list[str] = Form(...),
-    clustering_algorithm: str = Form(...),
-    preprocess: bool = Form(True),
-    user_id: str = Form(...),
-    params: str = Form("{}"),
-    mongodb_database=Depends(get_mongodb),
-):
-    try:
-        # Lese die Datei und extrahiere die Spaltennamen
-        content = await file.read()
-        try:
-            df = pd.read_csv(io.BytesIO(content))
-            columns = df.columns.tolist()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
-
-        # Speichere den Datensatz und die Metadaten in MongoDB
-        data_collection = mongodb_database.get_collection("data")
-        await data_collection.insert_one(
-            {
-                "dataset_name": file.filename,
-                "content_type": file.content_type,
-                "size": len(content),
-                "user_id": user_id,
-                "columns": columns,
-                "data": content.decode("utf-8"),  # Speichere die CSV-Daten als String
-            }
-        )
-
-        # Starte den Clustering-Job und leite ihn an Celery weiter
-        created_timestamp = datetime.now(TIMEZONE).isoformat()
-        params_dict = json.loads(params) if isinstance(params, str) else params
-
-        job = run_clustering_job.delay(
-            file.filename,
-            columns,
-            created_timestamp,
-            clustering_algorithm.lower(),
-            preprocess,
-            user_id,
-            **params_dict,
-        )
-
-        return {
-            "dataset_name": file.filename,
-            "job_id": job.id,  # Dies ist die Celery-Job-ID
-            "columns": columns,
-            "clustering_algorithm": clustering_algorithm,
-            "preprocess": preprocess,
-            "user_id": user_id,
-            "params": params_dict,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
 
 @app.post("/result/")
 async def post_result(req: ResultPutRequest, mongodb_database=Depends(get_mongodb)):
