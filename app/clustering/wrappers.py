@@ -41,8 +41,6 @@ class AffinityPropagationWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running AffinityPropagation with params: {self.params}")
@@ -67,14 +65,11 @@ class AffinityPropagationWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class AgglomerativeClusteringWrapper(BaseClustering):
     backend_name = "agglomerative"
     frontend_name = "Agglomerative"
 
-    def __init__(
-        self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params
-    ):
+    def __init__(self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params):
         super().__init__(dataset_name, columns, **params)
         self.params["n_clusters"] = n_clusters
         self.params["linkage"] = linkage
@@ -86,8 +81,6 @@ class AgglomerativeClusteringWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running Agglomerative with params: {self.params}")
@@ -109,7 +102,6 @@ class AgglomerativeClusteringWrapper(BaseClustering):
 
         except Exception as e:
             raise RuntimeError(f"{self.backend_name} failed: {e}")
-
 
 
 class BayesianGaussianMixtureWrapper(BaseClustering):
@@ -139,8 +131,6 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             model = BayesianGaussianMixture(**self.params)
@@ -183,8 +173,6 @@ class BIRCHWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running BIRCH with params: {self.params}")
@@ -209,7 +197,6 @@ class BIRCHWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class BisectingKMeansWrapper(BaseClustering):
     backend_name = "bisectingkmeans"
     frontend_name = "Bisecting KMeans"
@@ -225,8 +212,6 @@ class BisectingKMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running BisectingKMeans with params: {self.params}")
@@ -250,7 +235,6 @@ class BisectingKMeansWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class DBSCANWrapper(BaseClustering):
     backend_name = "dbscan"
     frontend_name = "DBSCAN"
@@ -267,8 +251,6 @@ class DBSCANWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running DBSCAN with params: {self.params}")
@@ -285,7 +267,6 @@ class DBSCANWrapper(BaseClustering):
 
         except Exception as e:
             raise RuntimeError(f"{self.backend_name} failed: {e}")
-
 
 
 class GaussianMixtureWrapper(BaseClustering):
@@ -315,8 +296,6 @@ class GaussianMixtureWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             model = GaussianMixture(**self.params)
@@ -342,7 +321,6 @@ class GaussianMixtureWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class KMeansWrapper(BaseClustering):
     backend_name = "kmeans"
     frontend_name = "KMeans"
@@ -358,8 +336,6 @@ class KMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running KMeans with params: {self.params}")
@@ -383,7 +359,6 @@ class KMeansWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class MeanShiftWrapper(BaseClustering):
     backend_name = "meanshift"
     frontend_name = "Mean Shift"
@@ -399,8 +374,6 @@ class MeanShiftWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running MeanShift with params: {self.params}")
@@ -423,7 +396,6 @@ class MeanShiftWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class MiniBatchKMeansWrapper(BaseClustering):
     backend_name = "minibatchkmeans"
     frontend_name = "Mini Batch KMeans"
@@ -440,8 +412,6 @@ class MiniBatchKMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running MiniBatchKMeans with params: {self.params}")
@@ -465,7 +435,6 @@ class MiniBatchKMeansWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class OPTICSWrapper(BaseClustering):
     backend_name = "optics"
     frontend_name = "OPTICS"
@@ -482,8 +451,6 @@ class OPTICSWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running OPTICS with params: {self.params}")
@@ -509,7 +476,6 @@ class OPTICSWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}")
 
 
-
 class SpectralClusteringWrapper(BaseClustering):
     backend_name = "spectralclustering"
     frontend_name = "Spectral Clustering"
@@ -525,8 +491,6 @@ class SpectralClusteringWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            self.validate_data(data)
-            self.validate_params()
             data = self.prepare_data(data)
 
             print(f"Running Spectral clustering with params: {self.params}")
@@ -539,9 +503,7 @@ class SpectralClusteringWrapper(BaseClustering):
             result = {
                 "labels": labels.tolist(),
                 "n_clusters": len(set(labels)),
-                "affinity_matrix": model.affinity_matrix_.tolist()
-                if hasattr(model, "affinity_matrix_")
-                else None,
+                "affinity_matrix": model.affinity_matrix_.tolist() if hasattr(model, "affinity_matrix_") else None,
                 "cluster_sizes": dict(cluster_sizes),
             }
 
@@ -549,4 +511,3 @@ class SpectralClusteringWrapper(BaseClustering):
 
         except Exception as e:
             raise RuntimeError(f"{self.backend_name} failed: {e}")
-

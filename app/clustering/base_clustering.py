@@ -3,6 +3,7 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import pytz
 import requests
@@ -19,9 +20,9 @@ from sklearn.preprocessing import (
 TIMEZONE = pytz.timezone("UTC")
 
 # Environment variables for FastAPI connection
-fastapi_host = os.getenv("FASTPI_HOST")
-fastapi_port = os.getenv("FASTAPI_PORT")
-fastapi_protocol = os.getenv("FASTAPI_PROTOCOL")
+FASTAPI_HOST = os.getenv("FASTAPI_HOST")
+FASTAPI_PORT = os.getenv("FASTAPI_PORT")
+FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
 
 
 class BaseClustering(ABC):
@@ -36,7 +37,7 @@ class BaseClustering(ABC):
 
     def load_data(self):
         try:
-            url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/{self.dataset_name}"
+            url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/dataset/{self.dataset_name}"
             print(f"Trying to load data from: {url}")  # Debug
             response = requests.get(url)
             response.raise_for_status()
@@ -86,10 +87,8 @@ class BaseClustering(ABC):
                 raise ValueError(f"Parameter '{key}' cannot be None.")
 
             # Disallow negative numbers for common numerical parameters
-            if isinstance(value, (int, float)) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
+            if isinstance(value, int | float) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
                 raise ValueError(f"Parameter '{key}' must be > 0.")
-
-
 
     def prepare_data(self, data, preprocess=True):
         # Apply preprocessing steps like scaling, normalization, and optional PCA
@@ -114,10 +113,7 @@ class BaseClustering(ABC):
             scaler = MaxAbsScaler()
         elif scaler_type == "auto":
             # Auto scaler selection based on feature range
-            if value_range.max() > 1000 or value_range.min() < 1e-3:
-                scaler = RobustScaler()
-            else:
-                scaler = StandardScaler()
+            scaler = RobustScaler() if value_range.max() > 1000 or value_range.min() < 0.001 else StandardScaler()
         else:
             raise ValueError(f"Unsupported scaler type: {scaler_type}")
 
@@ -141,8 +137,8 @@ class BaseClustering(ABC):
 
         return X_scaled
 
-    from abc import ABC, abstractmethod
-    
+    from abc import ABC
+
     @staticmethod
     @abstractmethod
     def get_default_params():
@@ -180,11 +176,9 @@ class BaseClustering(ABC):
             }
 
             # Post the result to FastAPI backend
-            url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
+            url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
             print(f"Sending results to: {url}")  # Debug print
-            response = requests.post(
-                f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/", json=payload
-            )
+            response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
 
             if response.status_code != 200:
                 print(f"Error saving results: {response.text}")
