@@ -52,11 +52,9 @@ class JobRequest(BaseModel):
     user_id: str
     params: dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
 
-
 class DatasetRequest(BaseModel):
     dataset_name: str
     user_id: str
-
 
 class ResultPutRequest(BaseModel):
     job_id: str
