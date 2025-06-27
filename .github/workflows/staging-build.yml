@@ -32,7 +32,7 @@ jobs:
         context: ./app
         file: ./app/fastapi.Dockerfile
         push: true
-        tags: patrickmeyer/caas-fastapi:${{ env.SHORT_SHA }}
+        tags: patrickmeyer/caas-api:${{ env.SHORT_SHA }}
 
     - name: Build and push Docker image for clustering-worker
       uses: docker/build-push-action@v5
