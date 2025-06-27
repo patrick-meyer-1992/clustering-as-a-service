@@ -1,0 +1,76 @@
+name: Build and Deploy All Services
+
+on:
+  push:
+    branches: [ "staging" ]
+  pull_request:
+    branches: [ "staging" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout application repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set short commit SHA
+      run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image for fastapi
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/fastapi.Dockerfile
+        push: true
+        tags: patrickmeyer/caas-fastapi:${{ env.SHORT_SHA }}
+
+    - name: Build and push Docker image for clustering-worker
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/clustering_worker.Dockerfile
+        push: true
+        tags: patrickmeyer/caas-clustering-worker:${{ env.SHORT_SHA }}
+
+    - name: Build and push Docker image for streamlit
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/streamlit.Dockerfile
+        push: true
+        tags: patrickmeyer/caas-streamlit:${{ env.SHORT_SHA }}
+
+    - name: Install kustomize
+      run: |
+        curl -s https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
+        sudo mv kustomize /usr/local/bin
+
+    - name: Clone config repo
+      run: |
+        git config --global user.email "you@example.com"
+        git config --global user.name "CI Bot"
+        git clone https://x-access-token:${{ secrets.CONFIG_REPO_PAT }}@github.com/patrick-meyer-1992/clustering-as-a-service-config
+        cd clustering-as-a-service-config/services
+
+        git switch staging
+        
+        # Update image tags in all services
+        for service in api clustering-worker streamlit; do
+          cd $service
+          kustomize edit set image patrickmeyer/caas-$service=patrickmeyer/caas-$service:${{ env.SHORT_SHA }}
+          cd ..
+        done
+
+        git add .
+        git commit -m "Update image tags to ${{ env.SHORT_SHA }} from $GITHUB_REPOSITORY@$GITHUB_SHA"
+        git push

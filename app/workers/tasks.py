@@ -42,8 +42,12 @@ def run_clustering_job(
         data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
 
-        # Debugging: Logge die generierten Ergebnisse
-        print(f"Generated results for job_id {job_id}: {result}")
+        # Die Datenpunkte (X) und Spaltennamen (columns) für die graphische Darstellung ergänzen
+        result["X"] = data.tolist()  # 2D-Array als Liste für JSON-Speicherung
+        result["columns"] = columns
+
+        # Debugging: Logge die erweiterten Ergebnisse
+        print(f"Result with X and columns for job_id {job_id}: {result}")
 
         clustering.save_results(result, job_id, created_timestamp, started_timestamp, user_id)
 

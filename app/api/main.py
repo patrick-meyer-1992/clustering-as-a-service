@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
@@ -137,70 +137,6 @@ async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
         )
     except Exception as e:
         print(f"Error retrieving dataset: {e}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
-
-# Get clustering result by task_id | Forwarding results to the frontend
-@app.get("/cluster/{task_id}")
-async def get_clustering_result(
-    task_id: str,
-    presentation: str = Query("table", enum=["table", "raw", "graph"]),
-    mongodb_database=Depends(get_mongodb),
-):
-    try:
-        # Debugging: Logge die übergebene job_id
-        print(f"Retrieving clustering result for job_id: {task_id}")
-
-        # Hole das Ergebnis aus MongoDB
-        result_collection = mongodb_database.get_collection("results")
-        result = await result_collection.find_one({"job_id": task_id})
-
-        if not result:
-            raise HTTPException(
-                status_code=404, detail=f"Result not found for given job_id: {task_id}"
-            )
-
-        # Debugging: Logge die abgerufenen Ergebnisse
-        print(f"Clustering result retrieved: {result}")
-
-        # Verarbeite das Ergebnis basierend auf der Präsentation
-        additional = result.get("additional_results", {})
-        labels = result.get("labels")
-        X = additional.get("X")
-        columns = additional.get("columns")
-
-        if presentation == "table":
-            if X is not None and columns is not None:
-                df = []
-                for row, label in zip(X, labels, strict=False):
-                    row_dict = {col: val for col, val in zip(columns, row, strict=False)}
-                    row_dict["Cluster"] = label
-                    df.append(row_dict)
-                return {"data": df, "columns": columns + ["Cluster"]}
-            else:
-                return {"labels": labels}
-
-        if presentation == "raw":
-            return labels
-
-        if presentation == "graph":
-            if X is None or labels is None or len(X) == 0 or len(labels) == 0:
-                raise HTTPException(status_code=400, detail="No data for plotting")
-            X_np = np.array(X)
-            labels_np = np.array(labels)
-            if X_np.shape[1] < 2:
-                raise HTTPException(status_code=400, detail="Data is not 2D")
-            fig = px.scatter(
-                x=X_np[:, 0],
-                y=X_np[:, 1],
-                color=labels_np.astype(str),
-                title=f"Clustering: {result.get('clustering_algorithm')}",
-            )
-            return fig.to_dict()
-
-        raise HTTPException(status_code=400, detail="Invalid presentation type")
-    except Exception as e:
-        print(f"Error retrieving clustering result: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
@@ -411,3 +347,115 @@ async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
 def start_automl_dummy():
     task = celery.send_task("automl_worker.hello_automl")
     return JSONResponse(content={"task_id": task.id})
+
+
+@app.get("/cluster/{task_id}/table")
+async def get_clustering_result_table(
+    task_id: str,
+    mongodb_database=Depends(get_mongodb),
+):
+    try:
+        result_collection = mongodb_database.get_collection("results")
+        result = await result_collection.find_one({"job_id": task_id})
+        if not result:
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
+
+        additional = result.get("additional_results", {})
+        labels = result.get("labels")
+        X = additional.get("X")
+        columns = additional.get("columns")
+
+        if X is not None and columns is not None:
+            df = []
+            for row, label in zip(X, labels, strict=False):
+                row_dict = {col: val for col, val in zip(columns, row, strict=False)}
+                row_dict["Cluster"] = label
+                df.append(row_dict)
+            return {"data": df, "columns": columns + ["Cluster"]}
+        else:
+            return {"labels": labels}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
+
+@app.get("/cluster/{task_id}/raw")
+async def get_clustering_result_raw(
+    task_id: str,
+    mongodb_database=Depends(get_mongodb),
+):
+    try:
+        result_collection = mongodb_database.get_collection("results")
+        result = await result_collection.find_one({"job_id": task_id})
+        if not result:
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
+        return result.get("labels")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
+
+@app.get("/cluster/{task_id}/graph")
+async def get_clustering_result_graph(
+    task_id: str,
+    mongodb_database=Depends(get_mongodb),
+):
+    try:
+        result_collection = mongodb_database.get_collection("results")
+        result = await result_collection.find_one({"job_id": task_id})
+        if not result:
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
+
+        additional = result.get("additional_results", {})
+        labels = result.get("labels")
+        X = additional.get("X")
+
+        if X is None or labels is None or len(X) == 0 or len(labels) == 0:
+            raise HTTPException(status_code=400, detail="No data for plotting")
+        X_np = np.array(X)
+        labels_np = np.array(labels)
+        if X_np.shape[1] < 2:
+            raise HTTPException(status_code=400, detail="Data is not 2D")
+        fig = px.scatter(
+            x=X_np[:, 0],
+            y=X_np[:, 1],
+            color=labels_np.astype(str),
+            title=f"Clustering: {result.get('clustering_algorithm')}",
+        )
+        return fig.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+
+
+@app.get("/jobs/")
+async def list_jobs(mongodb_database=Depends(get_mongodb)):
+    """
+    Gibt eine Übersicht aller bekannten Jobs inkl. Status zurück.
+    """
+    try:
+        results_collection = mongodb_database.get_collection("results")
+        jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
+        job_list = []
+        for job in jobs:
+            job_id = job.get("job_id")
+            celery_status = None
+            if job_id:
+                task = celery.AsyncResult(job_id)
+                celery_status = task.status
+            job_list.append(
+                {
+                    "job_id": job_id,
+                    "dataset_name": job.get("dataset_name"),
+                    "created_timestamp": job.get("created_timestamp"),
+                    "clustering_algorithm": job.get("clustering_algorithm"),
+                    "user_id": job.get("user_id"),
+                    "status": celery_status,
+                }
+            )
+        return job_list
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e

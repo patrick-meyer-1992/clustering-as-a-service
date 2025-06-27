@@ -47,6 +47,50 @@ class BaseClustering(ABC):
             print(f"Error loading data: {str(e)}")
             raise
 
+    import numpy as np
+
+    def validate_data(self, data):
+        # Check for None
+        if data is None:
+            raise ValueError("Input data is None.")
+
+        # Check shape attribute
+        if not hasattr(data, "shape"):
+            raise TypeError("Input data must be array-like with a shape attribute.")
+
+        # Check empty
+        if data.size == 0:
+            raise ValueError("Input data is empty.")
+
+        # Check 2D shape
+        if len(data.shape) != 2:
+            raise ValueError("Input data must be 2-dimensional (samples, features).")
+
+        # Check if numeric
+        if not np.issubdtype(data.dtype, np.number):
+            raise TypeError("Input data must be numeric.")
+
+    def validate_params(self):
+        """
+        Basic validation of input parameters.
+        This does not replace sklearn's internal validation,
+        but catches obvious issues early (e.g. wrong types, empty values).
+        """
+        for key, value in self.params.items():
+            # Disallow empty strings
+            if isinstance(value, str) and value.strip() == "":
+                raise ValueError(f"Parameter '{key}' cannot be an empty string.")
+
+            # Disallow None (except for known valid exceptions)
+            if value is None and key not in ["preference", "init"]:
+                raise ValueError(f"Parameter '{key}' cannot be None.")
+
+            # Disallow negative numbers for common numerical parameters
+            if isinstance(value, (int, float)) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
+                raise ValueError(f"Parameter '{key}' must be > 0.")
+
+
+
     def prepare_data(self, data, preprocess=True):
         # Apply preprocessing steps like scaling, normalization, and optional PCA
         X = data
@@ -96,6 +140,16 @@ class BaseClustering(ABC):
             X_scaled = pca.fit_transform(X_scaled)
 
         return X_scaled
+
+    from abc import ABC, abstractmethod
+    
+    @staticmethod
+    @abstractmethod
+    def get_default_params():
+        """
+        Must return a dictionary of default parameters.
+        """
+        pass
 
     @abstractmethod
     def run(self, data):
