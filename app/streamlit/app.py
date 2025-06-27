@@ -14,7 +14,10 @@ import streamlit as st
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
 
-FASTAPI_URL = "http://caas-fastapi:8000"
+FASTAPI_HOST = os.getenv("FASTAPI_HOST")
+FASTAPI_PORT = os.getenv("FASTAPI_PORT")
+FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
+FASTAPI_URL = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}"
 
 if "dataset_name" not in st.session_state:
     st.session_state["dataset_name"] = ""
