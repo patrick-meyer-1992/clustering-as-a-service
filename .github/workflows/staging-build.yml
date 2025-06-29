@@ -62,7 +62,8 @@ jobs:
         git clone https://x-access-token:${{ secrets.CONFIG_REPO_PAT }}@github.com/patrick-meyer-1992/clustering-as-a-service-config
         cd clustering-as-a-service-config/services
 
-        git switch staging
+        git switch main
+        cd staging/app
         
         # Update image tags in all services
         for service in api clustering-worker streamlit; do
