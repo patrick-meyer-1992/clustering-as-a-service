@@ -2,6 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+RUN mkdir -p /app/plots
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     swig \

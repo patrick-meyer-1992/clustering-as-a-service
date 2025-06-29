@@ -48,7 +48,12 @@ TIMEZONE = pytz.timezone("UTC")
 # warmstart: Whether or not to use warmstart, examples will be shown below on how to use this.
 # verbose_level: Must be either 0, 1 or 2. The higher the number, the more logs/print statements are used. For normal usage we recommend using 1.
 @celery.task(name="automl_worker.run_autocluster", bind=True)
-def run_autocluster(self, *, dataset_name, columns):
+def run_autocluster(self, *, dataset_name, columns,
+                    clustering_algorithms=None,
+                    dim_reduction_algorithms=None,
+                    n_evaluations=50,
+                    cutoff_time=60,
+                    evaluator_ls=None):
 
     job_id = self.request.id
 
@@ -76,24 +81,24 @@ def run_autocluster(self, *, dataset_name, columns):
         # === Configure AutoCluster ===
         
         
-        clustering_algorithms = [
+        if clustering_algorithms is None:
+            clustering_algorithms = [
                 'KMeans', 'GaussianMixture', 'Birch',
-                'MiniBatchKMeans', 'AgglomerativeClustering', 'SpectralClustering']
-        
+                'MiniBatchKMeans', 'AgglomerativeClustering', 'SpectralClustering'
+            ]
 
-        # ['NullModel']
-        dim_redution_algorithms = [
+        if dim_reduction_algorithms is None:
+            dim_reduction_algorithms = [
                 'TSNE', 'PCA', 'IncrementalPCA',
-                'KernelPCA', 'FastICA', 'TruncatedSVD']
+                'KernelPCA', 'FastICA', 'TruncatedSVD'
+            ]
+
+        if evaluator_ls is None:
+            evaluator_ls = ['silhouetteScore', 'daviesBouldinScore', 'calinskiHarabaszScore']
 
 
         optimizer = 'smac'
 
-        n_evaluations = 50
-
-        cutoff_time = 60
-
-        evaluator_ls = ['silhouetteScore', 'daviesBouldinScore', 'calinskiHarabaszScore']
 
 
         print(f"[AutoML][{job_id}] Preparing fit parameters...")
@@ -103,8 +108,8 @@ def run_autocluster(self, *, dataset_name, columns):
         fit_params = {
             "df": df,
             "cluster_alg_ls": clustering_algorithms,
-            "dim_reduction_alg_ls": dim_redution_algorithms,
-            "optimizer": optimizer,
+            "dim_reduction_alg_ls": dim_reduction_algorithms,
+            "optimizer": optimizer, 
             "n_evaluations": n_evaluations,
             "run_obj": 'quality',
             "seed": 27,
@@ -147,7 +152,8 @@ def run_autocluster(self, *, dataset_name, columns):
             print(f"[AutoML][{job_id}]   - {key}: {summary}")
 
 
-        predictions = cluster.predict(df, save_plot=False)
+        # Path mitgeben und graph speichern
+        predictions = cluster.predict(df)
         print(result_dict["optimal_cfg"])
         print(Counter(predictions))
 

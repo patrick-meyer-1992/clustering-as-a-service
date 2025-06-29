@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime
 from typing import Any
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -448,7 +449,12 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
 @app.post("/automl/cluster")
 async def start_automl(
     dataset_name: str = Form(...), 
-    columns: str = Form(...)
+    columns: str = Form(...),
+    clustering_algorithms: Optional[str] = Form(None),
+    dim_reduction_algorithms: Optional[str] = Form(None),
+    n_evaluations: int = Form(50),
+    cutoff_time: int = Form(60),
+    evaluator_ls: Optional[str] = Form(None),
 ):
     
     print("[AutoML] Received new request on /automl/cluster")
@@ -456,14 +462,41 @@ async def start_automl(
     try:
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
         
+
+        clustering_algorithms_list = json.loads(clustering_algorithms) if clustering_algorithms else [
+            'KMeans', 'GaussianMixture', 'Birch',
+            'MiniBatchKMeans', 'AgglomerativeClustering', 'SpectralClustering'
+        ]
+
+        dim_reduction_algorithms_list = json.loads(dim_reduction_algorithms) if dim_reduction_algorithms else [
+            'TSNE', 'PCA', 'IncrementalPCA',
+            'KernelPCA', 'FastICA', 'TruncatedSVD'
+        ]
+
+        evaluator_ls_list = json.loads(evaluator_ls) if evaluator_ls else [
+            'silhouetteScore', 'daviesBouldinScore', 'calinskiHarabaszScore'
+        ]
+
         print(f"[AutoML] Dataset: {dataset_name}")
         print(f"[AutoML] Columns: {columns_list}")
+        print(f"[AutoML] Algorithms: {clustering_algorithms_list}")
+        print(f"[AutoML] DimRed: {dim_reduction_algorithms_list}")
+        print(f"[AutoML] Evaluators: {evaluator_ls_list}")
+        print(f"[AutoML] Evaluations: {n_evaluations}, Cutoff: {cutoff_time}")
+        print(f"[AutoML] Dataset: {dataset_name}")
+        print(f"[AutoML] Columns: {columns_list}")
+
 
         job = celery.send_task(
             "automl_worker.run_autocluster",
             kwargs={
                 "dataset_name": dataset_name,
-                "columns": columns_list
+                "columns": columns_list,
+                "clustering_algorithms": clustering_algorithms_list,
+                "dim_reduction_algorithms": dim_reduction_algorithms_list,
+                "n_evaluations": n_evaluations,
+                "cutoff_time": cutoff_time,
+                "evaluator_ls": evaluator_ls_list,
             }
         )
 
