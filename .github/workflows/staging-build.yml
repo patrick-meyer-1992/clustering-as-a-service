@@ -60,7 +60,7 @@ jobs:
         git config --global user.email "you@example.com"
         git config --global user.name "CI Bot"
         git clone https://x-access-token:${{ secrets.CONFIG_REPO_PAT }}@github.com/patrick-meyer-1992/clustering-as-a-service-config
-        cd clustering-as-a-service-config/services
+        cd clustering-as-a-service-config
 
         git switch main
         cd staging/app
