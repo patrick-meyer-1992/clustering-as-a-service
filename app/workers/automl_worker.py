@@ -8,6 +8,8 @@ import pytz
 import requests
 
 
+from collections import Counter
+
 from autocluster import AutoCluster
 from autocluster import get_evaluator
 from autocluster import MetafeatureMapper
@@ -134,7 +136,7 @@ def run_autocluster(self, *, dataset_name, columns):
 
         cluster = AutoCluster()
         result_dict = cluster.fit(**fit_params)
-
+        
 
         print(f"[AutoML][{job_id}] AutoCluster finished successfully.")
         print(f"[AutoML][{job_id}] Result dictionary received from AutoCluster:")
@@ -144,6 +146,10 @@ def run_autocluster(self, *, dataset_name, columns):
                 summary = summary[:200] + "... (truncated)"
             print(f"[AutoML][{job_id}]   - {key}: {summary}")
 
+
+        predictions = cluster.predict(df, save_plot=False)
+        print(result_dict["optimal_cfg"])
+        print(Counter(predictions))
 
 
         payload = {
