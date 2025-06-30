@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
@@ -19,6 +19,28 @@ app = FastAPI()
 BUCKET_NAME = "caas-data"
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
+
+
+def validate_data(data):
+    # Check for None
+    if data is None:
+        raise ValueError("Input data is None.")
+
+    # Check shape attribute
+    if not hasattr(data, "shape"):
+        raise TypeError("Input data must be array-like with a shape attribute.")
+
+    # Check empty
+    if data.size == 0:
+        raise ValueError("Input data is empty.")
+
+    # Check 2D shape
+    if len(data.shape) != 2:
+        raise ValueError("Input data must be 2-dimensional (samples, features).")
+
+    # Check if numeric
+    if not np.issubdtype(data.dtype, np.number):
+        raise TypeError("Input data must be numeric.")
 
 
 async def get_mongodb():
@@ -44,6 +66,7 @@ async def get_mongodb():
         yield mongodb_database
     finally:
         await mongodb_client.close()
+
 
 class JobRequest(BaseModel):
     dataset_name: str
@@ -110,16 +133,16 @@ def post_job(req: JobRequest):
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
-async def get_dataset(
-    dataset_name: str, mongodb_database=Depends(get_mongodb)
-):
+async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
     try:
         # Debugging: Logge den übergebenen dataset_name
         print(f"Retrieving dataset: {dataset_name}")
 
         # Hole den Datensatz aus MongoDB
         data_collection = mongodb_database.get_collection("data")
-        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+        dataset = await data_collection.find_one(
+            {"dataset_name": dataset_name}, {"_id": 0, "data": 1}
+        )
 
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
@@ -138,6 +161,7 @@ async def get_dataset(
         print(f"Error retrieving dataset: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
+
 @app.put("/dataset/")
 async def put_dataset(
     file: UploadFile = File(...),  # TODO: streaming file
@@ -155,7 +179,7 @@ async def put_dataset(
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Speichere den Datensatz und die Metadaten in MongoDB
         data_collection = mongodb_database.get_collection("data")
@@ -223,12 +247,17 @@ async def upload_dataset(
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
         content = await file.read()
+
         # Parse the CSV file to extract column names
         try:
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
+
+        # Convert to Numpy array and validate
+        data_array = df.to_numpy()
+        validate_data(data_array)
 
         # Debugging: Logge die zu speichernden Daten
         print(f"Saving dataset: {file.filename}, columns: {columns}")
@@ -255,17 +284,28 @@ async def start_clustering(
     dataset_name: str = Form(...),
     columns: str = Form(...),
     clustering_algorithm: str = Form(...),
+    # TODO: Optimize preprocessing
     preprocess: bool = Form(True),
     user_id: str = Form(...),
-    params: str = Form("{}"),
+    clustering_params: str = Form("{}"),
+    preprocessing_params: str = Form("{}"),
 ):
     try:
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
-        params_dict = json.loads(params) if isinstance(params, str) else params
+        clustering_dict = (
+            json.loads(clustering_params)
+            if isinstance(clustering_params, str)
+            else clustering_params
+        )
+        preprocessing_dict = (
+            json.loads(preprocessing_params)
+            if isinstance(preprocessing_params, str)
+            else preprocessing_params
+        )
 
         # print(f"Starting clustering job: module={module_name}, class={class_name}")
-
+        # TODO: Validate params
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
@@ -273,7 +313,8 @@ async def start_clustering(
             clustering_algorithm,
             preprocess,
             user_id,
-            **params_dict,
+            clustering_params=clustering_dict,
+            preprocessing_params=preprocessing_dict,
         )
 
         return {
@@ -283,7 +324,8 @@ async def start_clustering(
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
-            "params": params_dict,
+            "clustering_params": clustering_dict,
+            "preprocessing_params": preprocessing_dict,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
@@ -356,7 +398,9 @@ async def get_clustering_result_table(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
 
         additional = result.get("additional_results", {})
         labels = result.get("labels")
@@ -385,7 +429,9 @@ async def get_clustering_result_raw(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
         return result.get("labels")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
@@ -400,12 +446,14 @@ async def get_clustering_result_graph(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Result not found for given job_id: {task_id}"
+            )
 
         additional = result.get("additional_results", {})
         labels = result.get("labels")
         X = additional.get("X")
-        columns = additional.get("columns")
+        columns = additional.get("columns")  # noqa: F841
 
         if X is None or labels is None or len(X) == 0 or len(labels) == 0:
             raise HTTPException(status_code=400, detail="No data for plotting")
@@ -439,14 +487,16 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
             if job_id:
                 task = celery.AsyncResult(job_id)
                 celery_status = task.status
-            job_list.append({
-                "job_id": job_id,
-                "dataset_name": job.get("dataset_name"),
-                "created_timestamp": job.get("created_timestamp"),
-                "clustering_algorithm": job.get("clustering_algorithm"),
-                "user_id": job.get("user_id"),
-                "status": celery_status,
-            })
+            job_list.append(
+                {
+                    "job_id": job_id,
+                    "dataset_name": job.get("dataset_name"),
+                    "created_timestamp": job.get("created_timestamp"),
+                    "clustering_algorithm": job.get("clustering_algorithm"),
+                    "user_id": job.get("user_id"),
+                    "status": celery_status,
+                }
+            )
         return job_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e

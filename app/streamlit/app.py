@@ -225,8 +225,7 @@ st.subheader("Ergebnisse anzeigen")
 
 # Auswahlmodus für die Job-Auswahl
 job_select_mode = st.radio(
-    "Job auswählen",
-    ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"]
+    "Job auswählen", ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"]
 )
 
 input_job_id = ""
@@ -240,6 +239,7 @@ elif job_select_mode == "Aktuellen Job anzeigen":
     else:
         st.warning("Kein aktueller Job vorhanden.")
 elif job_select_mode == "Job-Historie":
+
     def get_job_list():
         try:
             resp = requests.get(f"{FASTAPI_URL}/jobs/")
@@ -258,6 +258,7 @@ elif job_select_mode == "Job-Historie":
                 return []
         except Exception:
             return []
+
     job_list = get_job_list()
     job_options = []
     job_id_to_label = {}
@@ -281,11 +282,7 @@ presentation = st.selectbox(
 )
 
 if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {
-        "Tabelle": "table",
-        "Rohdaten": "raw",
-        "Graph": "graph"
-    }
+    mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
     pres = mapping[presentation]
     url = f"{FASTAPI_URL}/cluster/{input_job_id}/{pres}"
     try:
