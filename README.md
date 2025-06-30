@@ -1,6 +1,53 @@
 # Clustering-as-a-Service (CaaS)
 Eine RESTful-API, die es ermöglicht Datensätze zu clustern und die Ergebnisse zurück zu liefern.
 
+Die Anwendung besteht aus mehreren Microservices, die auf Servern der Fernuniversität in Hagen (FUH) in einem Kubernetes Cluster betrieben werden.
+
+## Voraussetzungen
+Um diese Anwendung zu nutzen, sind einige Konfiguration vorzunehmen.
+
+Da sie auf Servern der FUH gehostet wird, **ist ein Zugang zum Netzwerk der FUH ggf. über VPN notwendig**.
+
+Innerhalb der FUH Netzes ist die Anwendung unter folgenden URLs erreichbar:
+
+### Staging
+http://app.staging.caas.local (Frontend)
+
+http://api.staging.caas.local/docs (Backend-Dokumentation)
+
+### Production
+http://app.caas.local (Frontend)
+
+http://api.caas.local/docs (Backend-Dokumentation)
+
+Da die Anwendung und deren URLs nicht beim einem DNS-Server der FUH eingetragen sind, müssen lokale Änderungen zur Namensauflösung vorgenommen werden.
+
+Die folgenden Zeilen müssen in die entsprechende Konfigurationsdatei eingetragen werden:
+```
+132.176.108.158 app.staging.caas.local
+132.176.108.158 api.staging.caas.local
+132.176.108.158 app.caas.local
+132.176.108.158 api.caas.local
+```
+
+#### Windows 11
+Öffnen der Datei `C:\Windows\System32\drivers\etc\hosts` als Administrator mit einem Texteditor.
+
+Dort o.a. Zeilen eintragen.
+
+Ggf. ist ein Neustart erforderlich bevor die Änderungen wirksam werden.
+
+#### Mac
+Eingabe von `sudo nano /etc/hosts` in das Terminal.
+In die geöffnete Datei die o.a. Zeilen eintragen.
+
+#### Unix
+
+Eintragen der o.a. Zeilen in die Datei `/etc/hosts` (ggf. als `sudo`).
+
+
+In jedem Fall ist eine Verbindung zum FUH Netz erforderlich, damit die Anwendung unter den aufgeführten URLS erreicht werden kann.
+
 
 ## Pre-Commit Hooks
 Um die Lesbarkeit des Codes zu verbessern und um einige Bugs frühzeitig zu vermeiden, sind für dieses Projekt pre-commit hooks implementiert.
