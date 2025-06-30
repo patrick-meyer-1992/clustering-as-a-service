@@ -21,7 +21,6 @@ BUCKET_NAME = "caas-data"
 TIMEZONE = pytz.timezone("UTC")
 
 
-# TODO: Make sure this matches the call in /upload/
 def validate_data(data):
     # Check for None
     if data is None:
@@ -247,15 +246,18 @@ async def upload_dataset(
     if exists:
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
-        # TODO: Validate the csv
         content = await file.read()
-        validate_data(content)
+        
         # Parse the CSV file to extract column names
         try:
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+
+        # Convert to Numpy array and validate
+        data_array = df.to_numpy()
+        validate_data(data_array)
 
         # Debugging: Logge die zu speichernden Daten
         print(f"Saving dataset: {file.filename}, columns: {columns}")

@@ -23,6 +23,20 @@ fastapi_host = os.getenv("FASTPI_HOST")
 fastapi_port = os.getenv("FASTAPI_PORT")
 fastapi_protocol = os.getenv("FASTAPI_PROTOCOL")
 
+DEFAULT_PREPROCESSING_PARAMS = {
+    "scaler": "auto",
+    "use_normalization": False,
+    "normalization_type": "l2",
+    "use_pca": False,
+    "pca_components": 10,
+    "transform_type": None,
+    "imputation_strategy": "none", 
+    "outlier_removal": "none",  # "none", "zscore", "iqr"
+    "outlier_threshold": 3.0,     # only for zscore
+    "feature_selection": "none",   # "none", "low_variance", "constant"
+    "variance_threshold": 0.0      # for low_variance
+}
+
 
 class BaseClustering(ABC):
     frontend_name = None
@@ -49,26 +63,6 @@ class BaseClustering(ABC):
 
     import numpy as np
 
-    def validate_data(self, data):
-        # Check for None
-        if data is None:
-            raise ValueError("Input data is None.")
-
-        # Check shape attribute
-        if not hasattr(data, "shape"):
-            raise TypeError("Input data must be array-like with a shape attribute.")
-
-        # Check empty
-        if data.size == 0:
-            raise ValueError("Input data is empty.")
-
-        # Check 2D shape
-        if len(data.shape) != 2:
-            raise ValueError("Input data must be 2-dimensional (samples, features).")
-
-        # Check if numeric
-        if not np.issubdtype(data.dtype, np.number):
-            raise TypeError("Input data must be numeric.")
 
     def validate_params(self):
         """
@@ -101,9 +95,11 @@ class BaseClustering(ABC):
         df = pd.DataFrame(X)
         value_range = df.max() - df.min()
 
-        # Determine scaler type from parameters or auto-select
-        scaler_type = self.params.get("scaler", "auto")
+        # Merge default params with user params (user values override defaults)
+        params = {**DEFAULT_PREPROCESSING_PARAMS, **self.params}
 
+        # Determine scaler
+        scaler_type = params["scaler"]
         if scaler_type == "standard":
             scaler = StandardScaler()
         elif scaler_type == "minmax":
@@ -113,7 +109,6 @@ class BaseClustering(ABC):
         elif scaler_type == "maxabs":
             scaler = MaxAbsScaler()
         elif scaler_type == "auto":
-            # Auto scaler selection based on feature range
             if value_range.max() > 1000 or value_range.min() < 1e-3:
                 scaler = RobustScaler()
             else:
@@ -124,22 +119,80 @@ class BaseClustering(ABC):
         X_scaled = scaler.fit_transform(X)
 
         # Optional normalization
-        use_normalization = self.params.get("use_normalization", False)
-        norm_type = self.params.get("normalization_type", "l2")  # Options: 'l1', 'l2', 'max'
-
-        if use_normalization:
-            normalizer = Normalizer(norm=norm_type)
+        if params["use_normalization"]:
+            normalizer = Normalizer(norm=params["normalization_type"])
             X_scaled = normalizer.fit_transform(X_scaled)
 
-        # Optional PCA dimensionality reduction
-        use_pca = self.params.get("use_pca", False)
-        pca_components = self.params.get("pca_components", 10)
+        # Optional imputation (missing value handling)
+        imputation_strategy = params["imputation_strategy"]
 
-        if use_pca and X_scaled.shape[1] > pca_components:
-            pca = PCA(n_components=pca_components)
+        if imputation_strategy == "mean":
+            df = pd.DataFrame(X_scaled)
+            X_scaled = df.fillna(df.mean()).to_numpy()
+        elif imputation_strategy == "median":
+            df = pd.DataFrame(X_scaled)
+            X_scaled = df.fillna(df.median()).to_numpy()
+        elif imputation_strategy == "none":
+            pass 
+        else:
+            raise ValueError(f"Unsupported imputation strategy: {imputation_strategy}")
+
+        # Optional outlier removal
+        outlier_strategy = params["outlier_removal"]
+        threshold = params["outlier_threshold"]
+
+        if outlier_strategy == "zscore":
+            z_scores = np.abs((X_scaled - X_scaled.mean(axis=0)) / X_scaled.std(axis=0))
+            mask = (z_scores < threshold).all(axis=1)
+            X_scaled = X_scaled[mask]
+        elif outlier_strategy == "iqr":
+            Q1 = np.percentile(X_scaled, 25, axis=0)
+            Q3 = np.percentile(X_scaled, 75, axis=0)
+            IQR = Q3 - Q1
+            lower = Q1 - 1.5 * IQR
+            upper = Q3 + 1.5 * IQR
+            mask = ((X_scaled >= lower) & (X_scaled <= upper)).all(axis=1)
+            X_scaled = X_scaled[mask]
+        elif outlier_strategy == "none":
+            pass
+        else:
+            raise ValueError(f"Unsupported outlier removal strategy: {outlier_strategy}")
+
+        # Optional feature selection
+        feature_sel = params["feature_selection"]
+        var_thresh = params["variance_threshold"]
+
+        if feature_sel == "constant":
+            selector = VarianceThreshold(threshold=0.0)
+            X_scaled = selector.fit_transform(X_scaled)
+        elif feature_sel == "low_variance":
+            selector = VarianceThreshold(threshold=var_thresh)
+            X_scaled = selector.fit_transform(X_scaled)
+        elif feature_sel == "none":
+            pass
+        else:
+            raise ValueError(f"Unsupported feature_selection method: {feature_sel}")
+
+        # Optional PCA dimensionality reduction
+        if params["use_pca"] and X_scaled.shape[1] > params["pca_components"]:
+            pca = PCA(n_components=params["pca_components"])
             X_scaled = pca.fit_transform(X_scaled)
 
+        # Optional post-scaling transformation
+        transform_type = params["transform_type"]
+
+        if transform_type == "quantile":
+            transformer = QuantileTransformer(output_distribution="normal")
+            X_scaled = transformer.fit_transform(X_scaled)
+        elif transform_type == "power":
+            transformer = PowerTransformer()
+            X_scaled = transformer.fit_transform(X_scaled)
+        elif transform_type not in (None, ""):
+            raise ValueError(f"Unsupported transform_type: {transform_type}")
+
+
         return X_scaled
+
 
     from abc import ABC, abstractmethod
     
