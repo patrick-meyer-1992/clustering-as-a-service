@@ -46,7 +46,7 @@ In die geöffnete Datei die o.a. Zeilen eintragen.
 Eintragen der o.a. Zeilen in die Datei `/etc/hosts` (ggf. als `sudo`).
 
 
-In jedem Fall ist eine Verbindung zum FUH Netz erforderlich, damit die Anwendung unter den aufgeführten URLS erreicht werden kann.
+In jedem Fall ist eine Verbindung zum FUH Netz erforderlich, damit die Anwendung unter den aufgeführten URLs erreicht werden kann.
 
 
 ## Pre-Commit Hooks
