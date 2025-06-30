@@ -165,20 +165,32 @@ if st.session_state["dataset_name"]:
         "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
     )
     preprocess = st.checkbox("Preprocessing", value=True)
+    use_automl = st.checkbox("AutoML verwenden", value=False)
     params = {}
 
     if st.button("Clustering starten"):
-        data = {
-            "dataset_name": st.session_state["dataset_name"],
-            "columns": json.dumps(columns),
-            "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
-            "preprocess": str(preprocess),
-            "user_id": user_id,
-            "params": json.dumps(params),
-        }
-
         try:
-            res = requests.post(f"{FASTAPI_URL}/cluster/", data=data)
+            columns_json = json.dumps(columns)
+            if use_automl:
+                # AutoML-Request
+                data = {
+                    "dataset_name": st.session_state["dataset_name"],
+                    "columns": columns_json
+                }
+                res = requests.post(f"{FASTAPI_URL}/automl/cluster", data=data)
+            else:
+            # Klassisches Clustering
+                data = {
+                    "dataset_name": st.session_state["dataset_name"],
+                    "columns": json.dumps(columns),
+                    "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
+                    "preprocess": str(preprocess),
+                    "user_id": user_id,
+                    "params": json.dumps(params),
+                }
+                res = requests.post(f"{FASTAPI_URL}/cluster/", data=data)
+
+            
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")
