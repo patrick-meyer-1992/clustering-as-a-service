@@ -8,11 +8,12 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
+from workers.tasks import run_clustering_job
 
 app = FastAPI()
 BUCKET_NAME = "caas-data"
@@ -32,9 +33,7 @@ async def get_mongodb():
         mongodb_client = AsyncMongoClient(MONGODB_URL)
         print(f"Using MongoDB URL: {MONGODB_URL}")
     else:
-        mongodb_client = AsyncMongoClient(
-            f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}"
-        )
+        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
     try:
@@ -51,9 +50,11 @@ class JobRequest(BaseModel):
     user_id: str
     params: dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
 
+
 class DatasetRequest(BaseModel):
     dataset_name: str
     user_id: str
+
 
 class ResultPutRequest(BaseModel):
     job_id: str
@@ -104,6 +105,7 @@ def post_job(req: JobRequest):
 
     return response
 
+
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
     try:
@@ -112,9 +114,7 @@ async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
 
         # Hole den Datensatz aus MongoDB
         data_collection = mongodb_database.get_collection("data")
-        dataset = await data_collection.find_one(
-            {"dataset_name": dataset_name}, {"_id": 0, "data": 1}
-        )
+        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
 
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
@@ -291,9 +291,7 @@ async def list_datasets(mongodb_database=Depends(get_mongodb)):
     Returns a list of all uploaded datasets with their user IDs.
     """
     data_collection = mongodb_database.get_collection("data")
-    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1, "user_id": 1}).to_list(
-        length=1000
-    )
+    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1, "user_id": 1}).to_list(length=1000)
     return datasets
 
 
@@ -346,9 +344,7 @@ async def get_clustering_result_table(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(
-                status_code=404, detail=f"Result not found for given job_id: {task_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
 
         additional = result.get("additional_results", {})
         labels = result.get("labels")
@@ -377,9 +373,7 @@ async def get_clustering_result_raw(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(
-                status_code=404, detail=f"Result not found for given job_id: {task_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
         return result.get("labels")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
@@ -394,9 +388,7 @@ async def get_clustering_result_graph(
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": task_id})
         if not result:
-            raise HTTPException(
-                status_code=404, detail=f"Result not found for given job_id: {task_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
 
         additional = result.get("additional_results", {})
         labels = result.get("labels")
@@ -450,34 +442,22 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
 
 
 @app.post("/automl/cluster")
-async def start_automl(
-    dataset_name: str = Form(...), 
-    columns: str = Form(...)
-):
-    
+async def start_automl(dataset_name: str = Form(...), columns: str = Form(...)):
     print("[AutoML] Received new request on /automl/cluster")
 
     try:
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
-        
+
         print(f"[AutoML] Dataset: {dataset_name}")
         print(f"[AutoML] Columns: {columns_list}")
 
         job = celery.send_task(
-            "automl_worker.run_autocluster",
-            kwargs={
-                "dataset_name": dataset_name,
-                "columns": columns_list
-            }
+            "automl_worker.run_autocluster", kwargs={"dataset_name": dataset_name, "columns": columns_list}
         )
 
         print(f"[AutoML] Job started with ID: {job.id}")
 
-        return {
-            "job_id": job.id,
-            "dataset_name": dataset_name,
-            "columns": columns_list
-        }
+        return {"job_id": job.id, "dataset_name": dataset_name, "columns": columns_list}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
@@ -487,9 +467,8 @@ async def start_automl(
 async def get_automl_result(
     job_id: str = Query(...),
     presentation: str = Query("table", enum=["table", "raw", "graph"]),
-    mongodb_database=Depends(get_mongodb)
+    mongodb_database=Depends(get_mongodb),
 ):
-    
     result_collection = mongodb_database.get_collection("results")
     result = await result_collection.find_one({"job_id": job_id, "clustering_algorithm": "AutoCluster"})
 
@@ -527,4 +506,3 @@ async def get_automl_result(
         return fig.to_dict()
 
     raise HTTPException(status_code=400, detail="Invalid presentation format")
-
