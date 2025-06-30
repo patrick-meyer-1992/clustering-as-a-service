@@ -179,7 +179,7 @@ async def put_dataset(
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Speichere den Datensatz und die Metadaten in MongoDB
         data_collection = mongodb_database.get_collection("data")
@@ -247,13 +247,13 @@ async def upload_dataset(
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
         content = await file.read()
-        
+
         # Parse the CSV file to extract column names
         try:
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Convert to Numpy array and validate
         data_array = df.to_numpy()
@@ -287,12 +287,22 @@ async def start_clustering(
     # TODO: Optimize preprocessing
     preprocess: bool = Form(True),
     user_id: str = Form(...),
-    params: str = Form("{}"),
+    clustering_params: str = Form("{}"),
+    preprocessing_params: str = Form("{}"),
 ):
     try:
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
-        params_dict = json.loads(params) if isinstance(params, str) else params
+        clustering_dict = (
+            json.loads(clustering_params)
+            if isinstance(clustering_params, str)
+            else clustering_params
+        )
+        preprocessing_dict = (
+            json.loads(preprocessing_params)
+            if isinstance(preprocessing_params, str)
+            else preprocessing_params
+        )
 
         # print(f"Starting clustering job: module={module_name}, class={class_name}")
         # TODO: Validate params
@@ -303,7 +313,8 @@ async def start_clustering(
             clustering_algorithm,
             preprocess,
             user_id,
-            **params_dict,
+            clustering_params=clustering_dict,
+            preprocessing_params=preprocessing_dict,
         )
 
         return {
@@ -313,7 +324,8 @@ async def start_clustering(
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
-            "params": params_dict,
+            "clustering_params": clustering_dict,
+            "preprocessing_params": preprocessing_dict,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
@@ -441,7 +453,7 @@ async def get_clustering_result_graph(
         additional = result.get("additional_results", {})
         labels = result.get("labels")
         X = additional.get("X")
-        columns = additional.get("columns")
+        columns = additional.get("columns")  # noqa: F841
 
         if X is None or labels is None or len(X) == 0 or len(labels) == 0:
             raise HTTPException(status_code=400, detail="No data for plotting")

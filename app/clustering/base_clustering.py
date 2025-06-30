@@ -3,14 +3,18 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import pytz
 import requests
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import (
     MaxAbsScaler,
     MinMaxScaler,
     Normalizer,
+    PowerTransformer,
+    QuantileTransformer,
     RobustScaler,
     StandardScaler,
 )
@@ -30,11 +34,11 @@ DEFAULT_PREPROCESSING_PARAMS = {
     "use_pca": False,
     "pca_components": 10,
     "transform_type": None,
-    "imputation_strategy": "none", 
+    "imputation_strategy": "none",
     "outlier_removal": "none",  # "none", "zscore", "iqr"
-    "outlier_threshold": 3.0,     # only for zscore
-    "feature_selection": "none",   # "none", "low_variance", "constant"
-    "variance_threshold": 0.0      # for low_variance
+    "outlier_threshold": 3.0,  # only for zscore
+    "feature_selection": "none",  # "none", "low_variance", "constant"
+    "variance_threshold": 0.0,  # for low_variance
 }
 
 
@@ -63,7 +67,6 @@ class BaseClustering(ABC):
 
     import numpy as np
 
-
     def validate_params(self):
         """
         Basic validation of input parameters.
@@ -80,10 +83,12 @@ class BaseClustering(ABC):
                 raise ValueError(f"Parameter '{key}' cannot be None.")
 
             # Disallow negative numbers for common numerical parameters
-            if isinstance(value, (int, float)) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
+            if (
+                isinstance(value, int | float)
+                and key in ["n_clusters", "max_iter", "n_init"]
+                and value <= 0
+            ):
                 raise ValueError(f"Parameter '{key}' must be > 0.")
-
-
 
     def prepare_data(self, data, preprocess=True):
         # Apply preprocessing steps like scaling, normalization, and optional PCA
@@ -133,7 +138,7 @@ class BaseClustering(ABC):
             df = pd.DataFrame(X_scaled)
             X_scaled = df.fillna(df.median()).to_numpy()
         elif imputation_strategy == "none":
-            pass 
+            pass
         else:
             raise ValueError(f"Unsupported imputation strategy: {imputation_strategy}")
 
@@ -190,12 +195,10 @@ class BaseClustering(ABC):
         elif transform_type not in (None, ""):
             raise ValueError(f"Unsupported transform_type: {transform_type}")
 
-
         return X_scaled
 
+    from abc import ABC
 
-    from abc import ABC, abstractmethod
-    
     @staticmethod
     @abstractmethod
     def get_default_params():

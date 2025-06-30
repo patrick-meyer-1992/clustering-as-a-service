@@ -14,7 +14,6 @@ from sklearn.cluster import (
     SpectralClustering,
 )
 from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
-from sklearn.preprocessing import PowerTransformer, QuantileTransformer
 
 from .base_clustering import BaseClustering
 
@@ -60,8 +59,7 @@ class AffinityPropagationWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class AgglomerativeClusteringWrapper(BaseClustering):
@@ -81,7 +79,7 @@ class AgglomerativeClusteringWrapper(BaseClustering):
         return AgglomerativeClustering().get_params()
 
     def run(self, data):
-        try:  
+        try:
             print(f"Running Agglomerative with params: {self.params}")
             model = AgglomerativeClustering(**self.params)
             model.fit(data)
@@ -100,8 +98,7 @@ class AgglomerativeClusteringWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class BayesianGaussianMixtureWrapper(BaseClustering):
@@ -140,7 +137,7 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
 
             return result
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class BIRCHWrapper(BaseClustering):
@@ -178,8 +175,7 @@ class BIRCHWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class BisectingKMeansWrapper(BaseClustering):
@@ -215,8 +211,7 @@ class BisectingKMeansWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class DBSCANWrapper(BaseClustering):
@@ -248,8 +243,7 @@ class DBSCANWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class GaussianMixtureWrapper(BaseClustering):
@@ -287,8 +281,7 @@ class GaussianMixtureWrapper(BaseClustering):
 
             return result
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class KMeansWrapper(BaseClustering):
@@ -324,8 +317,7 @@ class KMeansWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class MeanShiftWrapper(BaseClustering):
@@ -360,8 +352,7 @@ class MeanShiftWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class MiniBatchKMeansWrapper(BaseClustering):
@@ -398,8 +389,7 @@ class MiniBatchKMeansWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class OPTICSWrapper(BaseClustering):
@@ -438,8 +428,7 @@ class OPTICSWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
 class SpectralClusteringWrapper(BaseClustering):
@@ -476,5 +465,4 @@ class SpectralClusteringWrapper(BaseClustering):
             return result
 
         except Exception as e:
-            raise RuntimeError(f"{self.backend_name} failed: {e}")
-
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
