@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
-from workers.tasks import run_clustering_job
 
 app = FastAPI()
 BUCKET_NAME = "caas-data"
@@ -338,12 +337,6 @@ async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
         raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}") from e
 
 
-@app.post("/automl/cluster")
-def start_automl_dummy():
-    task = celery.send_task("automl_worker.hello_automl")
-    return JSONResponse(content={"task_id": task.id})
-
-
 @app.get("/cluster/{task_id}/table")
 async def get_clustering_result_table(
     task_id: str,
@@ -454,3 +447,84 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
         return job_list
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e
+
+
+@app.post("/automl/cluster")
+async def start_automl(
+    dataset_name: str = Form(...), 
+    columns: str = Form(...)
+):
+    
+    print("[AutoML] Received new request on /automl/cluster")
+
+    try:
+        columns_list = json.loads(columns) if isinstance(columns, str) else columns
+        
+        print(f"[AutoML] Dataset: {dataset_name}")
+        print(f"[AutoML] Columns: {columns_list}")
+
+        job = celery.send_task(
+            "automl_worker.run_autocluster",
+            kwargs={
+                "dataset_name": dataset_name,
+                "columns": columns_list
+            }
+        )
+
+        print(f"[AutoML] Job started with ID: {job.id}")
+
+        return {
+            "job_id": job.id,
+            "dataset_name": dataset_name,
+            "columns": columns_list
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
+
+
+@app.get("/automl/result/")
+async def get_automl_result(
+    job_id: str = Query(...),
+    presentation: str = Query("table", enum=["table", "raw", "graph"]),
+    mongodb_database=Depends(get_mongodb)
+):
+    
+    result_collection = mongodb_database.get_collection("results")
+    result = await result_collection.find_one({"job_id": job_id, "clustering_algorithm": "AutoCluster"})
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"No result found for job_id: {job_id}")
+
+    labels = result.get("labels")
+    additional = result.get("additional_results", {})
+    X = additional.get("X")
+    columns = additional.get("columns")
+
+    if presentation == "table":
+        if X and columns:
+            df = []
+            for row, label in zip(X, labels, strict=False):
+                row_dict = {col: val for col, val in zip(columns, row, strict=False)}
+                row_dict["Cluster"] = label
+                df.append(row_dict)
+            return {"data": df, "columns": columns + ["Cluster"]}
+        else:
+            return {"labels": labels}
+
+    if presentation == "raw":
+        return labels
+
+    if presentation == "graph":
+        if not X or not labels or len(X[0]) < 2:
+            raise HTTPException(status_code=400, detail="Graph data requires at least 2D input.")
+        fig = px.scatter(
+            x=[row[0] for row in X],
+            y=[row[1] for row in X],
+            color=[str(label) for label in labels],
+            title=f"AutoML Clustering: {result.get('clustering_algorithm')}",
+        )
+        return fig.to_dict()
+
+    raise HTTPException(status_code=400, detail="Invalid presentation format")
+
