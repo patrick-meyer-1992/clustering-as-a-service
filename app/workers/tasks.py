@@ -43,7 +43,7 @@ def run_clustering_job(
         result = clustering.run(data)
 
         # Die Datenpunkte (X) und Spaltennamen (columns) für die graphische Darstellung ergänzen
-        result["X"] = data.tolist()  # 2D-Array als Liste für JSON-Speicherung
+        result["X"] = data.tolist()
         result["columns"] = columns
 
         # Debugging: Logge die erweiterten Ergebnisse
