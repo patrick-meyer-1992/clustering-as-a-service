@@ -21,6 +21,28 @@ BUCKET_NAME = "caas-data"
 TIMEZONE = pytz.timezone("UTC")
 
 
+def validate_data(data):
+    # Check for None
+    if data is None:
+        raise ValueError("Input data is None.")
+
+    # Check shape attribute
+    if not hasattr(data, "shape"):
+        raise TypeError("Input data must be array-like with a shape attribute.")
+
+    # Check empty
+    if data.size == 0:
+        raise ValueError("Input data is empty.")
+
+    # Check 2D shape
+    if len(data.shape) != 2:
+        raise ValueError("Input data must be 2-dimensional (samples, features).")
+
+    # Check if numeric
+    if not np.issubdtype(data.dtype, np.number):
+        raise TypeError("Input data must be numeric.")
+
+
 async def get_mongodb():
     MONGODB_DB = os.getenv("MONGODB_DB")
     MONGODB_HOST = os.getenv("MONGODB_HOST")
@@ -219,12 +241,17 @@ async def upload_dataset(
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
     try:
         content = await file.read()
+
         # Parse the CSV file to extract column names
         try:
             df = pd.read_csv(io.BytesIO(content))
             columns = df.columns.tolist()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
+
+        # Convert to Numpy array and validate
+        data_array = df.to_numpy()
+        validate_data(data_array)
 
         # Debugging: Logge die zu speichernden Daten
         print(f"Saving dataset: {file.filename}, columns: {columns}")
@@ -251,17 +278,22 @@ async def start_clustering(
     dataset_name: str = Form(...),
     columns: str = Form(...),
     clustering_algorithm: str = Form(...),
+    # TODO: Optimize preprocessing
     preprocess: bool = Form(True),
     user_id: str = Form(...),
-    params: str = Form("{}"),
+    clustering_params: str = Form("{}"),
+    preprocessing_params: str = Form("{}"),
 ):
     try:
         created_timestamp = datetime.now(TIMEZONE).isoformat()
         columns_list = json.loads(columns) if isinstance(columns, str) else columns
-        params_dict = json.loads(params) if isinstance(params, str) else params
+        clustering_dict = json.loads(clustering_params) if isinstance(clustering_params, str) else clustering_params
+        preprocessing_dict = (
+            json.loads(preprocessing_params) if isinstance(preprocessing_params, str) else preprocessing_params
+        )
 
         # print(f"Starting clustering job: module={module_name}, class={class_name}")
-
+        # TODO: Validate params
         job = run_clustering_job.delay(
             dataset_name,
             columns_list,
@@ -269,7 +301,8 @@ async def start_clustering(
             clustering_algorithm,
             preprocess,
             user_id,
-            **params_dict,
+            clustering_params=clustering_dict,
+            preprocessing_params=preprocessing_dict,
         )
 
         return {
@@ -279,7 +312,8 @@ async def start_clustering(
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
             "user_id": user_id,
-            "params": params_dict,
+            "clustering_params": clustering_dict,
+            "preprocessing_params": preprocessing_dict,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
