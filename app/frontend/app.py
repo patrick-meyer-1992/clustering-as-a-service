@@ -8,13 +8,15 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
-
 import streamlit as st
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
 
-FASTAPI_URL = "http://caas-fastapi:8000"
+FASTAPI_HOST = os.getenv("FASTAPI_HOST")
+FASTAPI_PORT = os.getenv("FASTAPI_PORT")
+FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
+FASTAPI_URL = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}"
 
 if "dataset_name" not in st.session_state:
     st.session_state["dataset_name"] = ""
@@ -191,7 +193,7 @@ if st.session_state["dataset_name"]:
                 max_wait = 120  # max 2 Minuten warten
                 poll_interval = 2  # alle 2 Sekunden abfragen
 
-                for i in range(max_wait // poll_interval):
+                for _ in range(max_wait // poll_interval):
                     debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
                     if debug_resp.status_code == 200:
                         debug_data = debug_resp.json()
@@ -224,9 +226,7 @@ if st.session_state["dataset_name"]:
 st.subheader("Ergebnisse anzeigen")
 
 # Auswahlmodus für die Job-Auswahl
-job_select_mode = st.radio(
-    "Job auswählen", ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"]
-)
+job_select_mode = st.radio("Job auswählen", ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"])
 
 input_job_id = ""
 if job_select_mode == "Manuelle Eingabe":
@@ -277,9 +277,7 @@ elif job_select_mode == "Job-Historie":
     else:
         st.info("Keine Jobs vorhanden.")
 
-presentation = st.selectbox(
-    "Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"]
-)
+presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"])
 
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}

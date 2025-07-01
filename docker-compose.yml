@@ -21,13 +21,10 @@ services:
     build:
       context: ./app
       dockerfile: streamlit.Dockerfile
-    # command: streamlit run /code/streamlit/app.py --server.port=8501 --server.enableCORS=false
     ports:
       - "8501:8501"
-    # volumes:
-    #   - ./streamlit:/code/streamlit
-    #depends_on:
-    #  - fastapi
+    env_file:
+      - ./app/api/.env
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -39,13 +36,17 @@ services:
       - 15672:15672
     env_file:
       - ./message_broker/.env
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_VHOST=/
     volumes:
       - rabbitmq-lib:/var/lib/rabbitmq
       - rabbitmq-log:/var/log/rabbitmq
-      - type: bind
-        source: ./message_broker/.erlang.cookie
-        target: /var/lib/rabbitmq/.erlang.cookie
-        read_only: true
+      # - type: bind
+      #   source: ./message_broker/.erlang.cookie
+      #   target: /var/lib/rabbitmq/.erlang.cookie
+      #   read_only: true
     user: rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics ping
@@ -95,7 +96,7 @@ services:
       - ./redis/.env
     depends_on:
       - redis
-    restart: always    
+    restart: always
 
 volumes:
   rabbitmq-lib:

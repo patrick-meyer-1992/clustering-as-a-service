@@ -66,9 +66,7 @@ class AgglomerativeClusteringWrapper(BaseClustering):
     backend_name = "agglomerative"
     frontend_name = "Agglomerative"
 
-    def __init__(
-        self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params
-    ):
+    def __init__(self, dataset_name, columns, n_clusters=2, linkage="ward", affinity="euclidean", **params):
         super().__init__(dataset_name, columns, **params)
         self.params["n_clusters"] = n_clusters
         self.params["linkage"] = linkage
@@ -456,9 +454,7 @@ class SpectralClusteringWrapper(BaseClustering):
             result = {
                 "labels": labels.tolist(),
                 "n_clusters": len(set(labels)),
-                "affinity_matrix": model.affinity_matrix_.tolist()
-                if hasattr(model, "affinity_matrix_")
-                else None,
+                "affinity_matrix": model.affinity_matrix_.tolist() if hasattr(model, "affinity_matrix_") else None,
                 "cluster_sizes": dict(cluster_sizes),
             }
 
