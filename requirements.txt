@@ -1,4 +1,5 @@
 pytest
+pytest-asyncio
 pre-commit
 pymongo
 httpx
@@ -12,3 +13,4 @@ streamlit
 minio
 celery[redis,rabbitmq]
 python-multipart
+pytest-playwright
