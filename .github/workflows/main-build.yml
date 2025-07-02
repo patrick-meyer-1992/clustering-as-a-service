@@ -1,9 +1,7 @@
 name: Build and Deploy All Services
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
+  push: # Runs on push and when a PR is merged
     branches: [ "main" ]
 
 jobs:
