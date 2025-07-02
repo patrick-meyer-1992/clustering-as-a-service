@@ -174,8 +174,6 @@ if st.session_state["dataset_name"]:
             "preprocessing_params": preprocessing_params
         }
 
-        print(data)
-
         try:
             res = requests.post(f"{FASTAPI_URL}/cluster/", json=data)
             if res.status_code == 200:
