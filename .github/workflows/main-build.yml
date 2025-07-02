@@ -2,9 +2,9 @@ name: Build and Deploy All Services
 
 on:
   push:
-    branches: [ "staging" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "staging" ]
+    branches: [ "main" ]
 
 jobs:
   build:
@@ -63,7 +63,7 @@ jobs:
         cd clustering-as-a-service-config
 
         git switch main
-        cd staging/app
+        cd production/app
         
         # Update image tags in all services
         for service in api clustering-worker streamlit; do
@@ -73,5 +73,5 @@ jobs:
         done
 
         git add .
-        git commit -m "Update image tags (staging) to ${{ env.SHORT_SHA }} from $GITHUB_REPOSITORY@$GITHUB_SHA"
+        git commit -m "Update image tags (main/prod) to ${{ env.SHORT_SHA }} from $GITHUB_REPOSITORY@$GITHUB_SHA"
         git push
