@@ -2,7 +2,7 @@ import io
 import json
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, Annotated
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ import plotly.express as px
 import pytz
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
@@ -63,20 +63,8 @@ async def get_mongodb():
     finally:
         await mongodb_client.close()
 
-
-class JobRequest(BaseModel):
-    dataset_name: str
-    columns: list[str]
-    clustering_algorithm: str
-    preprocess: bool = True
-    user_id: str
-    params: dict[str, Any] = {}  # Algorithm-specific params (e.g., n_clusters, eps)
-
-
 class DatasetRequest(BaseModel):
     dataset_name: str
-    user_id: str
-
 
 class ResultPutRequest(BaseModel):
     job_id: str
@@ -89,43 +77,42 @@ class ResultPutRequest(BaseModel):
     params: dict[str, Any]
     labels: list[int]
     additional_results: dict[str, Any]
-    user_id: str
 
 
-@app.post("/job/")
-def post_job(req: JobRequest):
-    # TODO:
-    # Validate the request
-    # Check if the dataset URL is valid and dataset exists
-    # Check if the columns are valid
-    # Check if the clustering algorithm is supported
-    # Check if the user ID is valid
-    # Check if the params are valid
+# @app.post("/job/")
+# def post_job(req: JobRequest):
+#     # TODO:
+#     # Validate the request
+#     # Check if the dataset URL is valid and dataset exists
+#     # Check if the columns are valid
+#     # Check if the clustering algorithm is supported
+#     # Check if the user ID is valid
+#     # Check if the params are valid
 
-    created_timestamp = datetime.now(TIMEZONE).isoformat()
+#     created_timestamp = datetime.now(TIMEZONE).isoformat()
 
-    job = run_clustering_job.delay(
-        req.dataset_name,
-        req.columns,
-        created_timestamp,
-        req.clustering_algorithm.lower(),
-        req.preprocess,
-        req.user_id,
-        **req.params,
-    )
+#     job = run_clustering_job.delay(
+#         req.dataset_name,
+#         req.columns,
+#         created_timestamp,
+#         req.clustering_algorithm.lower(),
+#         req.preprocess,
+#         req.user_id,
+#         **req.params,
+#     )
 
-    response = {
-        "job_id": job.id,
-        "dataset_name": req.dataset_name,
-        "columns": req.columns,
-        "created_timestamp": created_timestamp,
-        "clustering_algorithm": req.clustering_algorithm.lower(),
-        "preprocess": req.preprocess,
-        "user_id": req.user_id,
-        "params": req.params,
-    }
+#     response = {
+#         "job_id": job.id,
+#         "dataset_name": req.dataset_name,
+#         "columns": req.columns,
+#         "created_timestamp": created_timestamp,
+#         "clustering_algorithm": req.clustering_algorithm.lower(),
+#         "preprocess": req.preprocess,
+#         "user_id": req.user_id,
+#         "params": req.params,
+#     }
 
-    return response
+#     return response
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
@@ -162,7 +149,6 @@ async def put_dataset(
     columns: list[str] = Form(...),
     clustering_algorithm: str = Form(...),
     preprocess: bool = Form(True),
-    user_id: str = Form(...),
     params: str = Form("{}"),
     mongodb_database=Depends(get_mongodb),
 ):
@@ -182,7 +168,6 @@ async def put_dataset(
                 "dataset_name": file.filename,
                 "content_type": file.content_type,
                 "size": len(content),
-                "user_id": user_id,
                 "columns": columns,
                 "data": content.decode("utf-8"),  # Speichere die CSV-Daten als String
             }
@@ -198,7 +183,6 @@ async def put_dataset(
             created_timestamp,
             clustering_algorithm.lower(),
             preprocess,
-            user_id,
             **params_dict,
         )
 
@@ -208,7 +192,6 @@ async def put_dataset(
             "columns": columns,
             "clustering_algorithm": clustering_algorithm,
             "preprocess": preprocess,
-            "user_id": user_id,
             "params": params_dict,
         }
     except Exception as e:
@@ -231,7 +214,6 @@ async def post_result(req: ResultPutRequest, mongodb_database=Depends(get_mongod
 @app.put("/upload/")
 async def upload_dataset(
     file: UploadFile = File(...),
-    user_id: str = Form(...),
     mongodb_database=Depends(get_mongodb),
 ):
     data_collection = mongodb_database.get_collection("data")
@@ -262,7 +244,6 @@ async def upload_dataset(
                 "dataset_name": file.filename,
                 "content_type": file.content_type,
                 "size": len(content),
-                "user_id": user_id,
                 "columns": columns,
                 "data": content.decode("utf-8"),  # Store the CSV content as a string
             }
@@ -272,48 +253,50 @@ async def upload_dataset(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
+class JobRequest(BaseModel):
+    dataset_name: str = Field(title="The name of the dataset", default=...)
+    columns: list[str] | None = Field(title="The columns to use for clustering", default=None)
+    clustering_algorithm: str = Field(title="The clustering algorithm to use", default=...)
+    preprocess: bool = Field(title="Whether to preprocess the data", default=True)
+    clustering_params: dict[str, Any] | None = Field(title="Clustering algorithm parameters", default=None)
+    preprocessing_params: dict[str, Any] | None = Field(title="Preprocessing parameters", default=None)
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "dataset_name": "iris.csv",
+                    "columns": ["sepal.length", "sepal.width"],
+                    "clustering_algorithm": "kmeans",
+                    "preprocess": "true",
+                    "clustering_params": {"n_clusters": 3},
+                    "preprocessing_params": {"scaler": "standard"}
+                }
+            ]
+        }
+    }
+
 
 @app.post("/cluster/")
-async def start_clustering(
-    dataset_name: str = Form(...),
-    columns: str = Form(...),
-    clustering_algorithm: str = Form(...),
-    # TODO: Optimize preprocessing
-    preprocess: bool = Form(True),
-    user_id: str = Form(...),
-    clustering_params: str = Form("{}"),
-    preprocessing_params: str = Form("{}"),
-):
+async def start_clustering(req: JobRequest):
     try:
-        created_timestamp = datetime.now(TIMEZONE).isoformat()
-        columns_list = json.loads(columns) if isinstance(columns, str) else columns
-        clustering_dict = json.loads(clustering_params) if isinstance(clustering_params, str) else clustering_params
-        preprocessing_dict = (
-            json.loads(preprocessing_params) if isinstance(preprocessing_params, str) else preprocessing_params
-        )
-
-        # print(f"Starting clustering job: module={module_name}, class={class_name}")
-        # TODO: Validate params
         job = run_clustering_job.delay(
-            dataset_name,
-            columns_list,
-            created_timestamp,
-            clustering_algorithm,
-            preprocess,
-            user_id,
-            clustering_params=clustering_dict,
-            preprocessing_params=preprocessing_dict,
+            req.dataset_name,
+            req.columns,
+            datetime.now(TIMEZONE).isoformat(),
+            req.clustering_algorithm,
+            req.preprocess,
+            **(req.clustering_params or {})
+            # preprocessing_params = req.preprocessing_params,
         )
 
         return {
-            "dataset_name": dataset_name,
+            "dataset_name": req.dataset_name,
             "job_id": job.id,
-            "columns": columns_list,
-            "clustering_algorithm": clustering_algorithm,
-            "preprocess": preprocess,
-            "user_id": user_id,
-            "clustering_params": clustering_dict,
-            "preprocessing_params": preprocessing_dict,
+            "columns": req.columns,
+            "clustering_algorithm": req.clustering_algorithm,
+            "preprocess": req.preprocess,
+            "clustering_params": req.clustering_params,
+            "preprocessing_params": req.preprocessing_params,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
@@ -322,10 +305,10 @@ async def start_clustering(
 @app.get("/datasets/")
 async def list_datasets(mongodb_database=Depends(get_mongodb)):
     """
-    Returns a list of all uploaded datasets with their user IDs.
+    Returns a list of all uploaded datasets.
     """
     data_collection = mongodb_database.get_collection("data")
-    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1, "user_id": 1}).to_list(length=1000)
+    datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=1000)
     return datasets
 
 
@@ -466,7 +449,6 @@ async def list_jobs(mongodb_database=Depends(get_mongodb)):
                     "dataset_name": job.get("dataset_name"),
                     "created_timestamp": job.get("created_timestamp"),
                     "clustering_algorithm": job.get("clustering_algorithm"),
-                    "user_id": job.get("user_id"),
                     "status": celery_status,
                 }
             )

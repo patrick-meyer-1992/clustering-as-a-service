@@ -60,19 +60,15 @@ def get_available_clustering_algorithms():
 # --- Upload Section ---
 uploaded_file = st.file_uploader("CSV-Datei hochladen", type=["csv"])
 
-# Global user ID for all actions
-user_id = st.text_input("User-ID", value="testuser")
-
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.write("Vorschau deiner Daten:", df.head())
 
     if st.button("Datei speichern"):
-        # Prepare file and user data for upload
+        # Prepare file for upload
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-        data = {"user_id": user_id}
         try:
-            res = requests.put(f"{FASTAPI_URL}/upload/", files=files, data=data)
+            res = requests.put(f"{FASTAPI_URL}/upload/", files=files)
             if res.status_code == 200:
                 response = res.json()
                 st.session_state["dataset_name"] = response.get("dataset_name", "")
@@ -94,17 +90,15 @@ if dataset_list:
         # Header row
         header_cols = st.columns([3, 2, 1, 1])
         header_cols[0].markdown("**Datensatzbezeichnung**")
-        header_cols[1].markdown("**Benutzer**")
 
         st.divider()
 
         # Create a row for each dataset with uniform spacing
         for dataset in dataset_list:
-            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+            col1, col3, col4 = st.columns([5, 1, 1])
 
-            # Display filename and user
+            # Display filename
             col1.text(dataset["dataset_name"])
-            col2.text(dataset.get("user_id", "unbekannt"))
 
             # Action buttons
             if col3.button("✅", key=f"select_{dataset['dataset_name']}", help="Auswählen"):
@@ -167,20 +161,23 @@ if st.session_state["dataset_name"]:
         "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
     )
     preprocess = st.checkbox("Preprocessing", value=True)
-    params = {}
+    clustering_params = {}
+    preprocessing_params = {}
 
     if st.button("Clustering starten"):
         data = {
             "dataset_name": st.session_state["dataset_name"],
-            "columns": json.dumps(columns),
+            "columns": columns,
             "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
-            "preprocess": str(preprocess),
-            "user_id": user_id,
-            "params": json.dumps(params),
+            "preprocess": preprocess,
+            "clustering_params": clustering_params,
+            "preprocessing_params": preprocessing_params
         }
 
+        print(data)
+
         try:
-            res = requests.post(f"{FASTAPI_URL}/cluster/", data=data)
+            res = requests.post(f"{FASTAPI_URL}/cluster/", json=data)
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")
