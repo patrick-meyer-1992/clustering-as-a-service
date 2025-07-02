@@ -22,7 +22,6 @@ def run_clustering_job(
     created_timestamp,
     clustering_algorithm,
     preprocess,
-    user_id,
     **params,
 ):
     try:
@@ -49,7 +48,7 @@ def run_clustering_job(
         # Debugging: Logge die erweiterten Ergebnisse
         print(f"Result with X and columns for job_id {job_id}: {result}")
 
-        clustering.save_results(result, job_id, created_timestamp, started_timestamp, user_id)
+        clustering.save_results(result, job_id, created_timestamp, started_timestamp)
 
     except Exception as e:
         print(f"Error in clustering job: {str(e)}")

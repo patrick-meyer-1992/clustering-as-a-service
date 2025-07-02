@@ -206,7 +206,7 @@ class BaseClustering(ABC):
         # Abstract method to run the clustering algorithm
         pass
 
-    def save_results(self, result, job_id, created_timestamp, started_timestamp, user_id):
+    def save_results(self, result, job_id, created_timestamp, started_timestamp):
         """
         Save clustering results to FastAPI backend
         """
@@ -226,7 +226,6 @@ class BaseClustering(ABC):
                 "params": self.params,
                 "labels": labels,
                 "additional_results": result,
-                "user_id": user_id,
             }
 
             # Post the result to FastAPI backend
