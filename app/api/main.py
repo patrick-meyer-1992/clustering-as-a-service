@@ -16,10 +16,9 @@ from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
 
 app = FastAPI()
-BUCKET_NAME = "caas-data"
+
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
-
 
 def validate_data(data):
     # Check for None
