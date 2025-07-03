@@ -155,7 +155,7 @@ class DatasetDeleteResponse(BaseModel):
         }
     }
 
-@app.delete("/datasets/{dataset_name}")
+@app.delete("/dataset/{dataset_name}")
 async def delete_dataset(
     dataset_name: str,
     mongodb_database=Depends(get_mongodb),
@@ -172,25 +172,25 @@ async def delete_dataset(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
 class DatasetGetResponse(BaseModel):
-    dataset_names: list[str] = Field(title="The names of the uploaded datasets", default=...)
+    dataset_name: str = Field(title="The name of the uploaded dataset", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "dataset_names": ["iris.csv", "titanic.csv"]
+                    "dataset_name": "iris.csv"
                 }
             ]
         }
     }
 
 @app.get("/datasets/")
-async def get_datasets(mongodb_database=Depends(get_mongodb)) -> DatasetGetResponse:
+async def get_datasets(mongodb_database=Depends(get_mongodb)) -> list[DatasetGetResponse]:
     """
     Returns a list of all uploaded datasets.
     """
     data_collection = mongodb_database.get_collection("data")
     datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=1000)
-    return DatasetGetResponse(dataset_names=[dataset["dataset_name"] for dataset in datasets])
+    return [DatasetGetResponse(**dataset) for dataset in datasets]
 
 class JobPostRequest(BaseModel):
     dataset_name: str = Field(title="The name of the dataset", default=...)
@@ -354,37 +354,55 @@ async def get_result_raw(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
-@app.get("/cluster/{task_id}/graph")
-async def get_clustering_result_graph(
-    task_id: str,
+@app.get("/result/{job_id}/graph")
+async def get_result_graph(
+    job_id: str,
+    x_column: str | None = Query(None, title="The column to use for the x-axis. Set only in combination with y_column"),
+    y_column: str | None = Query(None, title="The column to use for the y-axis. Set only in combination with x_column"),
     mongodb_database=Depends(get_mongodb),
 ):
+    
+    """
+    Creates a 2D plotly scatter plot for the clustering result of a job.
+
+    If x_column or y_column are not provided, the first two columns of the result will be used.    
+    """
     try:
         result_collection = mongodb_database.get_collection("results")
-        result = await result_collection.find_one({"job_id": task_id})
+        data_collection = mongodb_database.get_collection("data")
+
+        result = await result_collection.find_one({"job_id": job_id})
         if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {task_id}")
-
-        additional = result.get("additional_results", {})
-        labels = result.get("labels")
-        X = additional.get("X")
-
-        if X is None or labels is None or len(X) == 0 or len(labels) == 0:
+            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+        
+        dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
+        df = pd.read_csv(io.StringIO(dataset["data"]))
+        labels = [str(label) for label in sorted(result.get("labels"))]
+        if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
             raise HTTPException(status_code=400, detail="No data for plotting")
-        X_np = np.array(X)
-        labels_np = np.array(labels)
-        if X_np.shape[1] < 2:
+        
+        if x_column is None or y_column is None:
+            x_column = result.get("columns")[0]
+            y_column = result.get("columns")[1]
+        elif x_column not in df.columns or y_column not in df.columns:
+            raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
+        
+        df = df[[x_column, y_column]]
+
+        print(df.head())
+
+        if df.shape[1] != 2:
             raise HTTPException(status_code=400, detail="Data is not 2D")
         fig = px.scatter(
-            x=X_np[:, 0],
-            y=X_np[:, 1],
-            color=labels_np.astype(str),
+            x=df[x_column],
+            y=df[y_column],
+            color=labels,
             title=f"Clustering: {result.get('clustering_algorithm')}",
+            labels={"x": x_column, "y": y_column}
         )
         return fig.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
 class ResultPostRequest(BaseModel):
     job_id: str = Field(title="The ID of the job", default=...)
     dataset_name: str = Field(title="The name of the dataset", default=...)
@@ -456,7 +474,6 @@ async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongo
     except Exception as e:
         print(f"Error saving result: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving result: {e}") from e
-
 
 class AutoMlClusterRequest(BaseModel):
     dataset_name: str = Field(title="The name of the dataset", default=...)
