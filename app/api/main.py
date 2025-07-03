@@ -77,43 +77,6 @@ class ResultPutRequest(BaseModel):
     labels: list[int]
     additional_results: dict[str, Any]
 
-
-# @app.post("/job/")
-# def post_job(req: JobRequest):
-#     # TODO:
-#     # Validate the request
-#     # Check if the dataset URL is valid and dataset exists
-#     # Check if the columns are valid
-#     # Check if the clustering algorithm is supported
-#     # Check if the user ID is valid
-#     # Check if the params are valid
-
-#     created_timestamp = datetime.now(TIMEZONE).isoformat()
-
-#     job = run_clustering_job.delay(
-#         req.dataset_name,
-#         req.columns,
-#         created_timestamp,
-#         req.clustering_algorithm.lower(),
-#         req.preprocess,
-#         req.user_id,
-#         **req.params,
-#     )
-
-#     response = {
-#         "job_id": job.id,
-#         "dataset_name": req.dataset_name,
-#         "columns": req.columns,
-#         "created_timestamp": created_timestamp,
-#         "clustering_algorithm": req.clustering_algorithm.lower(),
-#         "preprocess": req.preprocess,
-#         "user_id": req.user_id,
-#         "params": req.params,
-#     }
-
-#     return response
-
-
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
     try:
