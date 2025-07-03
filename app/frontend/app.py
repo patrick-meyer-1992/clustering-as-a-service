@@ -37,7 +37,7 @@ def get_dataset_list():
 
 def delete_dataset_backend(dataset_name):
     try:
-        resp = requests.delete(f"{FASTAPI_URL}/datasets/{dataset_name}")
+        resp = requests.delete(f"{FASTAPI_URL}/dataset/{dataset_name}")
         return resp.status_code == 200
     except Exception:
         return False
@@ -175,7 +175,7 @@ if st.session_state["dataset_name"]:
         }
 
         try:
-            res = requests.post(f"{FASTAPI_URL}/cluster/", json=data)
+            res = requests.post(f"{FASTAPI_URL}/job/", json=data)
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")
@@ -277,7 +277,7 @@ presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabe
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
     pres = mapping[presentation]
-    url = f"{FASTAPI_URL}/cluster/{input_job_id}/{pres}"
+    url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
     try:
         resp = requests.get(url)
         if resp.status_code == 200:

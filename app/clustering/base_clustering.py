@@ -223,7 +223,8 @@ class BaseClustering(ABC):
                 "started_timestamp": started_timestamp,
                 "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
                 "clustering_algorithm": self.frontend_name,
-                "params": self.params,
+                "clustering_params": self.params,
+                "preprocessing_params": DEFAULT_PREPROCESSING_PARAMS,
                 "labels": labels,
                 "additional_results": result,
             }
