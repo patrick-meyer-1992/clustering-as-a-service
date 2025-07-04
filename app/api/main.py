@@ -154,11 +154,13 @@ async def put_dataset(
 
 class DatasetDeleteResponse(BaseModel):
     dataset_name: str = Field(description="The name of the deleted dataset", default=...)
+    job_ids: list[str] | None = Field(description="List of job IDs associated with the deleted dataset", default=None)
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "dataset_name": "iris.csv"
+                    "dataset_name": "iris.csv",
+                    "job_ids": ["fb231936-1d83-43de-85a4-81c6889dd21c", "777b6e2e-07b6-47a8-82e1-f08900ea0176"]
                 }
             ]
         }
@@ -170,13 +172,17 @@ async def delete_dataset(
     mongodb_database=Depends(get_mongodb),
 ) -> DatasetDeleteResponse:
     """
-    Delete a dataset from mongoDB.
+    Delete a dataset from mongoDB and all results associated with it.
     """
     data_collection = mongodb_database.get_collection("data")
+    result_collection = mongodb_database.get_collection("results")
+    # Get all job IDs associated with the dataset
+    jobs = await result_collection.find({"dataset_name": dataset_name}, {"_id": 0,"job_id": 1}).to_list(length=None)
+    await result_collection.delete_many({"dataset_name": dataset_name})
     result = await data_collection.delete_one({"dataset_name": dataset_name})
 
     if result.deleted_count == 1:
-        return DatasetDeleteResponse(dataset_name=dataset_name)
+        return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
     else:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
@@ -341,7 +347,6 @@ async def get_result_table(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
-
 @app.get("/result/{job_id}/raw")
 async def get_result_raw(
     job_id: str,
@@ -355,7 +360,6 @@ async def get_result_raw(
         return result.get("labels")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
-
 
 @app.get("/result/{job_id}/graph")
 async def get_result_graph(
