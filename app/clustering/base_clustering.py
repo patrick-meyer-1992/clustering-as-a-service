@@ -124,10 +124,11 @@ class BaseClustering(ABC):
     frontend_name = None
     backend_name = None
 
-    def __init__(self, dataset_name, columns, **params):
-        self.params = params
+    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+        self.clustering_params = clustering_params
         self.dataset_name = dataset_name
         self.columns = columns
+        self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
     def load_data(self):
@@ -143,15 +144,13 @@ class BaseClustering(ABC):
             print(f"Error loading data: {str(e)}")
             raise
 
-    import numpy as np
-
     def validate_params(self):
         """
         Basic validation of input parameters.
         This does not replace sklearn's internal validation,
         but catches obvious issues early (e.g. wrong types, empty values).
         """
-        for key, value in self.params.items():
+        for key, value in self.clustering_params.items():
             # Disallow empty strings
             if isinstance(value, str) and value.strip() == "":
                 raise ValueError(f"Parameter '{key}' cannot be an empty string.")
@@ -164,7 +163,7 @@ class BaseClustering(ABC):
             if isinstance(value, int | float) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
                 raise ValueError(f"Parameter '{key}' must be > 0.")
 
-    def prepare_data(self, data, preprocess=True, preprocessing_params=None):
+    def prepare_data(self, data, preprocess=True):
         # Apply preprocessing steps like scaling, normalization, and optional PCA
         X = data
 
@@ -174,8 +173,8 @@ class BaseClustering(ABC):
         df = pd.DataFrame(X)
         value_range = df.max() - df.min()
 
-        # Merge default params with user params (user values override defaults)
-        params = preprocessing_params if preprocessing_params is not None else DEFAULT_PREPROCESSING_PARAMS
+        # Set default preprocessing parameters if not provided
+        params = self.preprocessing_params if self.preprocessing_params is not None else DEFAULT_PREPROCESSING_PARAMS
 
         # Determine scaler
         scaler_type = params["scaler"]
@@ -299,8 +298,8 @@ class BaseClustering(ABC):
                 "started_timestamp": started_timestamp,
                 "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
                 "clustering_algorithm": self.frontend_name,
-                "clustering_params": self.params,
-                "preprocessing_params": DEFAULT_PREPROCESSING_PARAMS,
+                "clustering_params": self.clustering_params,
+                "preprocessing_params": self.preprocessing_params,
                 "labels": labels,
                 "additional_results": result,
             }

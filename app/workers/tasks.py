@@ -23,7 +23,7 @@ def run_clustering_job(
     clustering_algorithm,
     preprocess,
     preprocessing_params,
-    **params,
+    **clustering_params,
 ):
     try:
         print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
@@ -36,10 +36,10 @@ def run_clustering_job(
             raise ValueError(f"Unsupported algorithm: {algorithm_name}")
 
         clustering_class = ALGORITHM_MAP[algorithm_name]
-        clustering = clustering_class(dataset_name, columns, **params)
+        clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
         data = clustering.load_data()
-        data = clustering.prepare_data(data, preprocess, preprocessing_params)
+        data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
 
         # Debugging: Logge die erweiterten Ergebnisse
