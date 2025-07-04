@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Path, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
@@ -22,11 +22,12 @@ app = FastAPI()
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
 
-algorithms = [
-    getattr(wrappers, algo).backend_name
+ALGORITHM_MAP = {
+    getattr(wrappers, algo).backend_name: getattr(wrappers, algo)
     for algo in dir(wrappers)
     if algo.endswith("Wrapper")
-]
+}
+algorithms = [backend_name for backend_name in ALGORITHM_MAP.keys()]
 algorithms.append("auto")
 
 def validate_data(data):
@@ -600,3 +601,22 @@ async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}") from e
 
+@app.get("/parameters/{algorithm_name}")
+async def get_default_algorithm_parameters(
+    algorithm_name: str = Path(description="The clustering algorithm to check for default parameters", default=..., examples=algorithms)
+    ) -> dict[str, Any]:
+    """
+    Get the default parameters for a specific clustering algorithm.
+    """
+    algorithm = ALGORITHM_MAP.get(algorithm_name)
+    if not algorithm:
+        raise HTTPException(status_code=404, detail="Algorithm not found")
+
+    return {"clustering_params": algorithm.get_default_params()}
+
+@app.get("/algorithms/")
+async def get_available_algorithms() -> list[str]:
+    """
+    Get a list of available clustering algorithms.
+    """
+    return algorithms
