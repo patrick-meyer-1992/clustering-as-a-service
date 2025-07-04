@@ -68,7 +68,7 @@ if uploaded_file:
         # Prepare file for upload
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
         try:
-            res = requests.put(f"{FASTAPI_URL}/upload/", files=files)
+            res = requests.put(f"{FASTAPI_URL}/dataset/", files=files)
             if res.status_code == 200:
                 response = res.json()
                 st.session_state["dataset_name"] = response.get("dataset_name", "")
