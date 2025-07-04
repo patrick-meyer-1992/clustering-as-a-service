@@ -236,24 +236,12 @@ class JobPostRequest(BaseModel):
     }
 
 class JobPostResponse(BaseModel):
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    job_id: str = Field(title="The ID of the job", default=...)
-    columns: list[str] | None = Field(title="The columns to use for clustering", default=None)
-    clustering_algorithm: str = Field(title="The clustering algorithm to use", default=...)
-    preprocess: bool = Field(title="Whether to preprocess the data", default=True)
-    clustering_params: dict[str, Any] | None = Field(title="Clustering algorithm parameters", default=None)
-    preprocessing_params: dict[str, Any] | None = Field(title="Preprocessing parameters", default=None)
+    job_id: str = Field(description="The ID of the job", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
-                    "dataset_name": "iris.csv",
-                    "job_id": "fb231936-1d83-43de-85a4-81c6889dd21c",
-                    "columns": ["sepal.length", "sepal.width"],
-                    "clustering_algorithm": "kmeans",
-                    "preprocess": "true",
-                    "clustering_params": {"n_clusters": 3},
-                    "preprocessing_params": {"scaler": "standard"}
+                    "job_id": "fb231936-1d83-43de-85a4-81c6889dd21c"
                 }
             ]
         }
@@ -273,13 +261,7 @@ async def post_job(req: JobPostRequest) -> JobPostResponse:
         )
 
         return JobPostResponse(
-            dataset_name=req.dataset_name,
             job_id=job.id,
-            columns=req.columns,
-            clustering_algorithm=req.clustering_algorithm,
-            preprocess=req.preprocess,
-            clustering_params=req.clustering_params,
-            preprocessing_params=req.preprocessing_params,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
