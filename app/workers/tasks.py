@@ -22,6 +22,7 @@ def run_clustering_job(
     created_timestamp,
     clustering_algorithm,
     preprocess,
+    preprocessing_params,
     **params,
 ):
     try:
@@ -38,7 +39,7 @@ def run_clustering_job(
         clustering = clustering_class(dataset_name, columns, **params)
 
         data = clustering.load_data()
-        data = clustering.prepare_data(data, preprocess)
+        data = clustering.prepare_data(data, preprocess, preprocessing_params)
         result = clustering.run(data)
 
         # Die Datenpunkte (X) und Spaltennamen (columns) für die graphische Darstellung ergänzen

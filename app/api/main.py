@@ -14,11 +14,20 @@ from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
+from clustering import wrappers
+from clustering.base_clustering import PreProcessingParams
 
 app = FastAPI()
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
+
+algorithms = [
+    getattr(wrappers, algo).backend_name
+    for algo in dir(wrappers)
+    if algo.endswith("Wrapper")
+]
+algorithms.append("auto")
 
 def validate_data(data):
     # Check for None
@@ -208,7 +217,19 @@ class JobPostRequest(BaseModel):
                     "clustering_algorithm": "kmeans",
                     "preprocess": "true",
                     "clustering_params": {"n_clusters": 3},
-                    "preprocessing_params": {"scaler": "standard"}
+                    "preprocessing_params": {
+                        "scaler": "auto",
+                        "use_normalization": False,
+                        "normalization_type": "l2",
+                        "use_pca": False,
+                        "pca_components": 10,
+                        "transform_type": None,
+                        "imputation_strategy": "none",
+                        "outlier_removal": "none", 
+                        "outlier_threshold": 3.0,
+                        "feature_selection": "none",
+                        "variance_threshold": 0.0, 
+                    }
                 }
             ]
         }
@@ -247,8 +268,8 @@ async def post_job(req: JobPostRequest) -> JobPostResponse:
             datetime.now(TIMEZONE).isoformat(),
             req.clustering_algorithm,
             req.preprocess,
-            **(req.clustering_params or {})
-            # preprocessing_params = req.preprocessing_params,
+            preprocessing_params = req.preprocessing_params.model_dump() if req.preprocessing_params else None,
+            **(req.clustering_params or {}),
         )
 
         return JobPostResponse(
