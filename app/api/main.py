@@ -89,8 +89,8 @@ async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 class DatasetPutResponse(BaseModel):
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    columns: list[str] = Field(title="The columns used in the dataset", default=...)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    columns: list[str] = Field(description="The columns used in the dataset", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -103,7 +103,7 @@ class DatasetPutResponse(BaseModel):
     }
 @app.put("/dataset/", response_model=DatasetPutResponse)
 async def put_dataset(
-    file: UploadFile = File(title="The CSV file to upload", default=...),
+    file: UploadFile = File(description="The CSV file to upload", default=...),
     mongodb_database=Depends(get_mongodb),
 ):
     data_collection = mongodb_database.get_collection("data")
@@ -144,7 +144,7 @@ async def put_dataset(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 class DatasetDeleteResponse(BaseModel):
-    dataset_name: str = Field(title="The name of the deleted dataset", default=...)
+    dataset_name: str = Field(description="The name of the deleted dataset", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -172,7 +172,7 @@ async def delete_dataset(
         raise HTTPException(status_code=404, detail="Dataset not found")
 
 class DatasetGetResponse(BaseModel):
-    dataset_name: str = Field(title="The name of the uploaded dataset", default=...)
+    dataset_name: str = Field(description="The name of the uploaded dataset", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -193,12 +193,12 @@ async def get_datasets(mongodb_database=Depends(get_mongodb)) -> list[DatasetGet
     return [DatasetGetResponse(**dataset) for dataset in datasets]
 
 class JobPostRequest(BaseModel):
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    columns: list[str] | None = Field(title="The columns to use for clustering", default=None)
-    clustering_algorithm: str = Field(title="The clustering algorithm to use", default=...)
-    preprocess: bool = Field(title="Whether to preprocess the data", default=True)
-    clustering_params: dict[str, Any] | None = Field(title="Clustering algorithm parameters", default=None)
-    preprocessing_params: dict[str, Any] | None = Field(title="Preprocessing parameters", default=None)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    columns: list[str] | None = Field(description="The columns to use for clustering", default=None)
+    clustering_algorithm: str = Field(description="The clustering algorithm to use", default=..., examples=algorithms)
+    preprocess: bool = Field(description="Whether to preprocess the data", default=True)
+    clustering_params: dict[str, Any] | None = Field(description="Clustering algorithm parameters", default=None)
+    preprocessing_params: PreProcessingParams | None = Field(description="Preprocessing parameters", default=None)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -264,11 +264,11 @@ async def post_job(req: JobPostRequest) -> JobPostResponse:
         raise HTTPException(status_code=500, detail=f"Error starting clustering: {str(e)}") from e
 
 class JobsGetResponse(BaseModel):
-    job_id: str = Field(title="The ID of the job", default=...)
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    created_timestamp: str = Field(title="The creation timestamp", default=...)
-    clustering_algorithm: str = Field(title="The clustering algorithm used", default=...)
-    status: str | None = Field(title="The status of the job", default=...)
+    job_id: str = Field(description="The ID of the job", default=...)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    created_timestamp: str = Field(description="The creation timestamp", default=...)
+    clustering_algorithm: str = Field(description="The clustering algorithm used", default=...)
+    status: str | None = Field(description="The status of the job", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -404,17 +404,17 @@ async def get_result_graph(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 class ResultPostRequest(BaseModel):
-    job_id: str = Field(title="The ID of the job", default=...)
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    columns: list[str] = Field(title="The columns used in the dataset", default=...)
-    created_timestamp: str = Field(title="The creation timestamp", default=...)
-    started_timestamp: str = Field(title="The start timestamp", default=...)
-    finished_timestamp: str = Field(title="The finish timestamp", default=...)
-    clustering_algorithm: str = Field(title="The clustering algorithm used", default=...)
-    clustering_params: dict[str, Any] = Field(title="The parameters for the clustering algorithm", default=...)
-    preprocessing_params: dict[str, Any] = Field(title="The parameters for the preprocessing", default=...)
-    labels: list[int | None] = Field(title="The labels for the dataset", default=...)
-    additional_results: dict[str, Any] = Field(title="Additional results from the job", default=...)
+    job_id: str = Field(description="The ID of the job", default=...)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    columns: list[str] = Field(description="The columns used in the dataset", default=...)
+    created_timestamp: str = Field(description="The creation timestamp", default=...)
+    started_timestamp: str = Field(description="The start timestamp", default=...)
+    finished_timestamp: str = Field(description="The finish timestamp", default=...)
+    clustering_algorithm: str = Field(description="The clustering algorithm used", default=...)
+    clustering_params: dict[str, Any] = Field(description="The parameters for the clustering algorithm", default=...)
+    preprocessing_params: dict[str, Any] = Field(description="The parameters for the preprocessing", default=...)
+    labels: list[int | None] = Field(description="The labels for the dataset", default=...)
+    additional_results: dict[str, Any] = Field(description="Additional results from the job", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -452,7 +452,7 @@ class ResultPostRequest(BaseModel):
     }
 
 class ResultPostResponse(BaseModel):
-    job_id: str = Field(title="The ID of the job", default=...)
+    job_id: str = Field(description="The ID of the job", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -476,8 +476,8 @@ async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongo
         raise HTTPException(status_code=500, detail=f"Error saving result: {e}") from e
 
 class AutoMlClusterRequest(BaseModel):
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    columns: list[str] = Field(title="The columns to use for clustering", default=...)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    columns: list[str] = Field(description="The columns to use for clustering", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -490,9 +490,9 @@ class AutoMlClusterRequest(BaseModel):
     }
 
 class AutoMlClusterResponse(BaseModel):
-    job_id: str = Field(title="The ID of the AutoML clustering job", default=...)
-    dataset_name: str = Field(title="The name of the dataset", default=...)
-    columns: list[str] = Field(title="The columns used for clustering", default=...)
+    job_id: str = Field(description="The ID of the AutoML clustering job", default=...)
+    dataset_name: str = Field(description="The name of the dataset", default=...)
+    columns: list[str] = Field(description="The columns used for clustering", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
