@@ -131,6 +131,11 @@ class BaseClustering(ABC):
         self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
+        # Set default preprocessing parameters if not provided
+        for k, v in self.get_default_params().items():
+            if k not in self.clustering_params:
+                self.clustering_params[k] = v
+
     def load_data(self):
         try:
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/dataset/{self.dataset_name}"
@@ -270,7 +275,7 @@ class BaseClustering(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_default_params():
+    def get_default_params() -> dict:
         """
         Must return a dictionary of default parameters.
         """
