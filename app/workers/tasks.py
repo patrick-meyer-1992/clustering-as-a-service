@@ -42,10 +42,6 @@ def run_clustering_job(
         data = clustering.prepare_data(data, preprocess, preprocessing_params)
         result = clustering.run(data)
 
-        # Die Datenpunkte (X) und Spaltennamen (columns) für die graphische Darstellung ergänzen
-        result["X"] = data.tolist()
-        result["columns"] = columns
-
         # Debugging: Logge die erweiterten Ergebnisse
         print(f"Result with X and columns for job_id {job_id}: {result}")
 
