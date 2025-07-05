@@ -2,7 +2,7 @@ import io
 import json
 import os
 from datetime import datetime
-from typing import Any, Literal, Annotated
+from typing import Any, Hashable
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,6 @@ ALGORITHM_MAP = {
     if algo.endswith("Wrapper")
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP.keys()]
-algorithms.append("auto")
 
 def validate_data(data):
     # Check for None
@@ -324,27 +323,21 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
-):
+) -> dict[Hashable, Any]:
     try:
         result_collection = mongodb_database.get_collection("results")
+        data_collection = mongodb_database.get_collection("data")
         result = await result_collection.find_one({"job_id": job_id})
+        
         if not result:
             raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+        
+        dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
+        df = pd.read_csv(io.StringIO(dataset["data"]))
+        df["labels"] = result.get("labels", [])
 
-        additional = result.get("additional_results", {})
-        labels = result.get("labels")
-        X = additional.get("X")
-        columns = additional.get("columns")
+        return df.to_dict(orient="dict")
 
-        if X is not None and columns is not None:
-            df = []
-            for row, label in zip(X, labels, strict=False):
-                row_dict = {col: val for col, val in zip(columns, row, strict=False)}
-                row_dict["Cluster"] = label
-                df.append(row_dict)
-            return {"data": df, "columns": columns + ["Cluster"]}
-        else:
-            return {"labels": labels}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
@@ -352,7 +345,7 @@ async def get_result_table(
 async def get_result_raw(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
-):
+) -> list[int | None]:
     try:
         result_collection = mongodb_database.get_collection("results")
         result = await result_collection.find_one({"job_id": job_id})
@@ -368,7 +361,7 @@ async def get_result_graph(
     x_column: str | None = Query(None, title="The column to use for the x-axis. Set only in combination with y_column"),
     y_column: str | None = Query(None, title="The column to use for the y-axis. Set only in combination with x_column"),
     mongodb_database=Depends(get_mongodb),
-):
+) -> dict[str, Any]:
     
     """
     Creates a 2D plotly scatter plot for the clustering result of a job.
@@ -396,8 +389,6 @@ async def get_result_graph(
             raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
         
         df = df[[x_column, y_column]]
-
-        print(df.head())
 
         if df.shape[1] != 2:
             raise HTTPException(status_code=400, detail="Data is not 2D")
@@ -499,15 +490,11 @@ class AutoMlClusterRequest(BaseModel):
 
 class AutoMlClusterResponse(BaseModel):
     job_id: str = Field(description="The ID of the AutoML clustering job", default=...)
-    dataset_name: str = Field(description="The name of the dataset", default=...)
-    columns: list[str] = Field(description="The columns used for clustering", default=...)
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
                     "job_id": "fb231936-1d83-43de-85a4-81c6889dd21c",
-                    "dataset_name": "iris.csv",
-                    "columns": ["sepal.length", "sepal.width"]
                 }
             ]
         }
@@ -528,8 +515,6 @@ async def start_automl(req: AutoMlClusterRequest) -> AutoMlClusterResponse:
 
         return AutoMlClusterResponse(
             job_id=job.id,
-            dataset_name=req.dataset_name,
-            columns=req.columns,
         )
 
     except Exception as e:

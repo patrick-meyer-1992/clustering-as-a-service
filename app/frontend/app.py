@@ -272,10 +272,10 @@ elif job_select_mode == "Job-Historie":
     else:
         st.info("Keine Jobs vorhanden.")
 
-presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"])
+presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Graph"])
 
 if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
+    mapping = {"Tabelle": "table", "Graph": "graph"}
     pres = mapping[presentation]
     url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
     try:
@@ -284,15 +284,7 @@ if st.button("Ergebnis anzeigen") and input_job_id:
             data = resp.json()
             # Präsentation auf voller Breite
             if pres == "table":
-                if "data" in data and "columns" in data:
-                    df = pd.DataFrame(data["data"], columns=data["columns"])
-                    st.write(df)
-                elif "labels" in data:
-                    st.write(pd.DataFrame({"labels": data["labels"]}))
-                else:
-                    st.warning("Keine Tabellendaten vorhanden.")
-            elif pres == "raw":
-                st.write(np.array(data))
+                st.dataframe(pd.DataFrame(data), use_container_width=True)
             elif pres == "graph":
                 fig = go.Figure(data)
                 if not fig.data:
