@@ -22,8 +22,8 @@ def run_clustering_job(
     created_timestamp,
     clustering_algorithm,
     preprocess,
-    user_id,
-    **params,
+    preprocessing_params,
+    **clustering_params,
 ):
     try:
         print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
@@ -36,20 +36,16 @@ def run_clustering_job(
             raise ValueError(f"Unsupported algorithm: {algorithm_name}")
 
         clustering_class = ALGORITHM_MAP[algorithm_name]
-        clustering = clustering_class(dataset_name, columns, **params)
+        clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
         data = clustering.load_data()
         data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
 
-        # Die Datenpunkte (X) und Spaltennamen (columns) für die graphische Darstellung ergänzen
-        result["X"] = data.tolist()
-        result["columns"] = columns
-
         # Debugging: Logge die erweiterten Ergebnisse
         print(f"Result with X and columns for job_id {job_id}: {result}")
 
-        clustering.save_results(result, job_id, created_timestamp, started_timestamp, user_id)
+        clustering.save_results(result, job_id, created_timestamp, started_timestamp)
 
     except Exception as e:
         print(f"Error in clustering job: {str(e)}")

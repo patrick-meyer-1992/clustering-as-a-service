@@ -166,9 +166,10 @@ def run_autocluster(self, *, dataset_name, columns,
             "started_timestamp": started_timestamp,
             "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
             "clustering_algorithm": "AutoCluster",
-            "params": {},  # leer, da Autocluster intern konfiguriert
+            "clustering_params": {},  # leer, da Autocluster intern konfiguriert
+            "preprocessing_params": {},  # leer, da Autocluster intern konfiguriert"
             "labels": predictions.tolist(),
-            "additional_results": ""
+            "additional_results": sanitize_result_dict(result_dict)
         }
 
         result_url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
