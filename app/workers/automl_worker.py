@@ -157,18 +157,18 @@ def run_autocluster(self, *, dataset_name, columns,
         print(result_dict["optimal_cfg"])
         print(Counter(predictions))
 
+        
 
         payload = {
             "job_id": job_id,
-            "dataset_name": dataset_name,
             "columns": columns,
             "created_timestamp": started_timestamp,
             "started_timestamp": started_timestamp,
             "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
             "clustering_algorithm": "AutoCluster",
             "params": {},  # leer, da Autocluster intern konfiguriert
-            "labels": {},
-            "additional_results": sanitize_result_dict(result_dict)
+            "labels": predictions.tolist(),
+            "additional_results": ""
         }
 
         result_url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
@@ -209,4 +209,41 @@ def sanitize_result_dict(result_dict):
         else:
             cleaned[k] = str(v)
     return cleaned
+
+
+    backend_name = "bisectingkmeans"
+    frontend_name = "Bisecting KMeans"
+
+    def __init__(self, dataset_name, columns, n_clusters=8, **params):
+        super().__init__(dataset_name, columns)
+        self.params["n_clusters"] = n_clusters
+        self.params.update(params)
+
+    @staticmethod
+    def get_default_params():
+        return BisectingKMeans().get_params()
+
+    def run(self, data):
+        try:
+            print(f"Running BisectingKMeans with params: {self.params}")
+            model = BisectingKMeans(**self.params)
+            model.fit(data)
+
+            labels = model.labels_
+            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
+
+            result = {
+                "labels": labels.tolist(),
+                "cluster_centers": model.cluster_centers_.tolist(),
+                "inertia": float(model.inertia_),
+                "n_iter": model.n_iter_.tolist(),
+                "cluster_sizes": dict(cluster_sizes),
+            }
+
+            return result
+
+        except Exception as e:
+            print(f"Error in BisectingKMeans clustering: {str(e)}")
+            raise
+
 

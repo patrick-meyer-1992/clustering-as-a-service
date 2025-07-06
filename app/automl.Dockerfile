@@ -19,7 +19,7 @@ RUN grep -v '^autocluster' /app/automl-requirements.txt > /tmp/requirements.txt 
     pip install --no-cache-dir --upgrade -r /tmp/requirements.txt
 
 RUN pip install git+https://github.com/wywongbd/autocluster.git@master && \
-    pip show autocluster
+    pip show autocluster6
 
 RUN python -c "import autocluster; print('AutoCluster import successful')"
 
