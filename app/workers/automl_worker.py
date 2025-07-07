@@ -138,7 +138,7 @@ def run_autocluster_job(job_id, dataset_name, columns,
                         cutoff_time=60,
                         evaluator_ls=None):
 
-    print(f"[AutoML][{job_id}] Incoming automl_worker.run_autocluster: dataset_name={dataset_name}, columns={columns}")
+    print(f"[AutoML][{job_id}] Incoming automl_worker.run_autocluster: dataset_name={dataset_name}, columns={columns}, n_evaluations={n_evaluations}, cutoff_time={cutoff_time}")
 
 
     print("[DEBUG] pynisher has enforce_limits:", hasattr(pynisher, "enforce_limits"))
@@ -160,14 +160,6 @@ def run_autocluster_job(job_id, dataset_name, columns,
         print(f"[AutoML][{job_id}] Dataset loaded successfully with shape {df.shape}")
 
         # === Configure AutoCluster ===
-        
-        
-        if not clustering_algorithms:
-            clustering_algorithms = [
-                'KMeans', 'GaussianMixture', 'Birch',
-                'MiniBatchKMeans', 'AgglomerativeClustering', 'SpectralClustering'
-            ]
-
         if not dim_reduction_algorithms:
             dim_reduction_algorithms = [
                 'TSNE', 'PCA', 'IncrementalPCA',
@@ -205,7 +197,7 @@ def run_autocluster_job(job_id, dataset_name, columns,
             },
             "evaluator": get_evaluator(
                 evaluator_ls,
-                weights=[],
+                weights=[1, 1, 1],
                 clustering_num=None,
                 min_proportion=.01
             ),

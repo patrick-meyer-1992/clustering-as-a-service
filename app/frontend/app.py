@@ -182,6 +182,8 @@ if st.session_state["dataset_name"]:
         ]
         selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
 
+        n_evaluations = st.slider("Anzahl AutoML Evaluationen", min_value=10, max_value=200, value=50, step=10)
+        cutoff_time = st.slider("Maximale Laufzeit pro Evaluation (Sekunden)", min_value=10, max_value=300, value=60, step=10)
 
     else:
         # Dynamic algorithm selection
@@ -197,6 +199,7 @@ if st.session_state["dataset_name"]:
         dataset_name = st.session_state["dataset_name"]
 
         cluster_url = f"{FASTAPI_URL}/automl/job" if use_automl else f"{FASTAPI_URL}/job/"
+        cutoff_time = 120  # Default cutoff time for manual clustering
 
         if use_automl:
             dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
@@ -206,6 +209,8 @@ if st.session_state["dataset_name"]:
                 "clustering_algorithms": selected_cluster_algorithms,
                 "dim_reduction_algorithms": selected_dim_reduction or None,
                 "evaluator_ls": selected_evaluators,
+                "n_evaluations": n_evaluations,
+                "cutoff_time": cutoff_time
             }
 
         else:
@@ -230,7 +235,7 @@ if st.session_state["dataset_name"]:
                 # Fortschrittsanzeige
                 status_placeholder = st.empty()
                 progress = 0
-                max_wait = 120  # max 2 Minuten warten
+                max_wait = cutoff_time  # max 2 Minuten warten
                 poll_interval = 2  # alle 2 Sekunden abfragen
 
                 for _ in range(max_wait // poll_interval):

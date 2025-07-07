@@ -402,6 +402,8 @@ async def get_result_graph(
         return fig.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    
+
 class ResultPostRequest(BaseModel):
     job_id: str = Field(description="The ID of the job", default=...)
     dataset_name: str = Field(description="The name of the dataset", default=...)
@@ -450,6 +452,7 @@ class ResultPostRequest(BaseModel):
         }
     }
 
+
 class ResultPostResponse(BaseModel):
     job_id: str = Field(description="The ID of the job", default=...)
     model_config = {
@@ -461,6 +464,7 @@ class ResultPostResponse(BaseModel):
             ]
         }
     }
+
 
 @app.post("/result/")
 async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongodb)) -> ResultPostResponse:
