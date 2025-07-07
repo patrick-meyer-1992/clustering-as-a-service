@@ -549,7 +549,7 @@ async def start_automl(req: AutoMlClusterRequest) -> AutoMlClusterResponse:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
-
+    
 
 @app.get("/debug/job/{job_id}")
 async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
