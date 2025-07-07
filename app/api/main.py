@@ -1,10 +1,8 @@
 import io
 import os
-from collections.abc import Hashable
 from datetime import datetime
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import pytz
@@ -46,8 +44,8 @@ def validate_data(data):
         raise ValueError("Input data must be 2-dimensional (samples, features).")
 
     # Check if numeric
-    if not np.issubdtype(data.dtype, np.number):
-        raise TypeError("Input data must be numeric.")
+    # if not np.issubdtype(data.dtype, np.number):
+    #    raise TypeError("Input data must be numeric.")
 
 
 async def get_mongodb():
@@ -315,7 +313,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
-) -> dict[Hashable, Any]:
+) -> dict[Any, Any]:
     try:
         result_collection = mongodb_database.get_collection("results")
         data_collection = mongodb_database.get_collection("data")
@@ -456,10 +454,34 @@ async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongo
 
 
 class AutoMlClusterRequest(BaseModel):
-    dataset_name: str = Field(description="The name of the dataset", default=...)
-    columns: list[str] = Field(description="The columns to use for clustering", default=...)
+    dataset_name: str = Field(..., description="The name of the dataset")
+    columns: list[str] = Field(..., description="The columns to use for clustering")
+    clustering_algorithms: list[str] | None = Field(
+        default=None, description="List of clustering algorithms to use (e.g., KMeans, DBSCAN)"
+    )
+    dim_reduction_algorithms: list[str] | None = Field(
+        default=None, description="List of dimensionality reduction algorithms (e.g., PCA, TSNE)"
+    )
+    evaluator_ls: list[str] | None = Field(
+        default=None, description="List of clustering evaluation metrics (e.g., silhouetteScore)"
+    )
+    n_evaluations: int | None = Field(default=50, description="Number of AutoML evaluations to run")
+    cutoff_time: int | None = Field(default=60, description="Time limit in seconds for each AutoML evaluation")
+
     model_config = {
-        "json_schema_extra": {"examples": [{"dataset_name": "iris.csv", "columns": ["sepal.length", "sepal.width"]}]}
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "dataset_name": "iris.csv",
+                    "columns": ["sepal.length", "sepal.width"],
+                    "clustering_algorithms": ["KMeans", "DBSCAN"],
+                    "dim_reduction_algorithms": ["PCA"],
+                    "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
+                    "n_evaluations": 20,
+                    "cutoff_time": 45,
+                }
+            ]
+        }
     }
 
 
@@ -481,18 +503,21 @@ async def start_automl(req: AutoMlClusterRequest) -> AutoMlClusterResponse:
     print("[AutoML] Received new request on /automl/job")
 
     try:
-        print(f"[AutoML] Dataset: {req.dataset_name}")
-        print(f"[AutoML] Columns: {req.columns}")
+        task_kwargs = {
+            "dataset_name": req.dataset_name,
+            "columns": req.columns,
+            "clustering_algorithms": req.clustering_algorithms,
+            "dim_reduction_algorithms": req.dim_reduction_algorithms,
+            "evaluator_ls": req.evaluator_ls,
+            "n_evaluations": req.n_evaluations,
+            "cutoff_time": req.cutoff_time,
+        }
 
-        job = celery.send_task(
-            "automl_worker.run_autocluster", kwargs={"dataset_name": req.dataset_name, "columns": req.columns}
-        )
+        job = celery.send_task("automl_worker.run_autocluster", kwargs=task_kwargs)
 
         print(f"[AutoML] Job started with ID: {job.id}")
 
-        return AutoMlClusterResponse(
-            job_id=job.id,
-        )
+        return AutoMlClusterResponse(job_id=job.id)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
