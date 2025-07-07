@@ -157,6 +157,10 @@ if st.session_state["dataset_name"]:
 
     use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
 
+    selected_cluster_algorithms = []
+    selected_dim_reduction = []
+    selected_evaluators = []
+
     if use_automl:
         # Mehrfachauswahl für Clustering-Algorithmen
         available_cluster_algorithms = [
@@ -170,7 +174,14 @@ if st.session_state["dataset_name"]:
             "Keine", "TSNE", "PCA", "IncrementalPCA",
             "KernelPCA", "FastICA", "TruncatedSVD"
         ]
-        selected_dim_reduction = st.multiselect("Dimensionality Reduction auswählen", available_dim_reduction, default=["TSNE", "PCA"])
+        selected_dim_reduction = st.multiselect("Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction)
+
+        # Mehrfachauswahl für Evaluator
+        available_evaluators = [
+            "silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"
+        ]
+        selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
+
 
     else:
         # Dynamic algorithm selection
@@ -193,7 +204,8 @@ if st.session_state["dataset_name"]:
                 "dataset_name": dataset_name,
                 "columns": columns,
                 "clustering_algorithms": selected_cluster_algorithms,
-                "dim_reduction_algorithms": dim_algos or None,
+                "dim_reduction_algorithms": selected_dim_reduction or None,
+                "evaluator_ls": selected_evaluators,
             }
 
         else:

@@ -40,6 +40,9 @@ def run_autocluster(self, *, dataset_name, columns,
 
     job_id = self.request.id
     print(f"[AutoML][{job_id}] Delegating to subprocess...")
+    print(f"[AutoML][{job_id}] {clustering_algorithms}")
+    print(f"[AutoML][{job_id}] {dim_reduction_algorithms}")
+    print(f"[AutoML][{job_id}] {evaluator_ls}")
 
     # Parameter an Subprozess übergeben
     script_path = os.path.abspath(__file__)
@@ -123,8 +126,6 @@ def save_results(self, result, job_id, created_timestamp, started_timestamp):
         if response.status_code != 200:
             print(f"Error saving results: {response.text}")
             return None
-
-            return response.json()
     except Exception as e:
         print(f"Error in save_results: {str(e)}")
         return None
@@ -161,19 +162,19 @@ def run_autocluster_job(job_id, dataset_name, columns,
         # === Configure AutoCluster ===
         
         
-        if clustering_algorithms is None:
+        if not clustering_algorithms:
             clustering_algorithms = [
                 'KMeans', 'GaussianMixture', 'Birch',
                 'MiniBatchKMeans', 'AgglomerativeClustering', 'SpectralClustering'
             ]
 
-        if dim_reduction_algorithms is None:
+        if not dim_reduction_algorithms:
             dim_reduction_algorithms = [
                 'TSNE', 'PCA', 'IncrementalPCA',
                 'KernelPCA', 'FastICA', 'TruncatedSVD'
             ]
 
-        if evaluator_ls is None:
+        if not evaluator_ls:
             evaluator_ls = ['silhouetteScore', 'daviesBouldinScore', 'calinskiHarabaszScore']
 
 
@@ -182,7 +183,9 @@ def run_autocluster_job(job_id, dataset_name, columns,
 
 
         print(f"[AutoML][{job_id}] Preparing fit parameters...")
-
+        print(f"[AutoML][{job_id}] Final algorithms: {clustering_algorithms}")
+        print(f"[AutoML][{job_id}] Final dim_red: {dim_reduction_algorithms}")
+        print(f"[AutoML][{job_id}] Evaluators: {evaluator_ls}")
 
         # === Fit-Konfiguration ===
         fit_params = {
@@ -221,15 +224,6 @@ def run_autocluster_job(job_id, dataset_name, columns,
 
         cluster = AutoCluster()
         result_dict = cluster.fit(**fit_params)
-
-        optimal_cfg = result_dict["optimal_cfg"]
-        clustering_model = result_dict["clustering_model"]
-        dim_reduction_model = result_dict["dim_reduction_model"]
-        scaler = result_dict["scaler"]
-        metafeatures = result_dict["metafeatures"]
-        used_metafeatures = result_dict["metafeatures_used"]
-        smac_obj = result_dict["smac_obj"]
-
 
 
         # Path mitgeben und graph speichern
@@ -317,6 +311,13 @@ if __name__ == "__main__":
     columns = json.loads(sys.argv[3])
 
     optional_params = json.loads(sys.argv[4]) if len(sys.argv) > 4 else {}
+
+    print("---- CLI ARGUMENTS ----")
+    print("job_id:", job_id)
+    print("dataset_name:", dataset_name)
+    print("columns:", columns)
+    print("optional_params:", optional_params)
+    print("------------------------")
 
     run_autocluster_job(
         job_id=job_id,
