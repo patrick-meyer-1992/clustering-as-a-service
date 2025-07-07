@@ -171,7 +171,7 @@ if st.session_state["dataset_name"]:
 
         # Mehrfachauswahl für Dimensionality Reduction
         available_dim_reduction = [
-            "Keine", "TSNE", "PCA", "IncrementalPCA",
+            "TSNE", "PCA", "IncrementalPCA",
             "KernelPCA", "FastICA", "TruncatedSVD"
         ]
         selected_dim_reduction = st.multiselect("Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction)
