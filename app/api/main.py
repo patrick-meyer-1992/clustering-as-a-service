@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 import pytz
 from clustering import wrappers
-from clustering.base_clustering import PreProcessingParams
+from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
