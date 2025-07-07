@@ -2,6 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+RUN mkdir -p /app/plots
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     swig \
@@ -23,4 +25,4 @@ RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
 
-CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=threads", "--concurrency=1"]
+CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
