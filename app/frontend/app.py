@@ -155,27 +155,60 @@ if st.session_state["dataset_name"]:
         st.error(f"Fehler beim Laden der Spalten: {e}")
         columns = []
 
-    # Dynamic algorithm selection
-    clustering_algorithms = get_available_clustering_algorithms()
-    clustering_algorithm = st.selectbox(
-        "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
-    )
-    preprocess = st.checkbox("Preprocessing", value=True)
-    clustering_params = {}
-    preprocessing_params = {}
+    use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
+
+    if use_automl:
+        # Mehrfachauswahl für Clustering-Algorithmen
+        available_cluster_algorithms = [
+            "KMeans", "GaussianMixture", "Birch",
+            "MiniBatchKMeans", "AgglomerativeClustering", "SpectralClustering"
+        ]
+        selected_cluster_algorithms = st.multiselect("Clustering-Algorithmen auswählen", available_cluster_algorithms, default=available_cluster_algorithms)
+
+        # Mehrfachauswahl für Dimensionality Reduction
+        available_dim_reduction = [
+            "Keine", "TSNE", "PCA", "IncrementalPCA",
+            "KernelPCA", "FastICA", "TruncatedSVD"
+        ]
+        selected_dim_reduction = st.multiselect("Dimensionality Reduction auswählen", available_dim_reduction, default=["TSNE", "PCA"])
+
+    else:
+        # Dynamic algorithm selection
+        clustering_algorithms = get_available_clustering_algorithms()
+        clustering_algorithm = st.selectbox(
+            "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
+        )
+        preprocess = st.checkbox("Preprocessing", value=True)
+        clustering_params = {}
+        preprocessing_params = {}
 
     if st.button("Clustering starten"):
-        data = {
-            "dataset_name": st.session_state["dataset_name"],
-            "columns": columns,
-            "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
-            "preprocess": preprocess,
-            "clustering_params": clustering_params,
-            "preprocessing_params": preprocessing_params
-        }
+        dataset_name = st.session_state["dataset_name"]
+
+        cluster_url = f"{FASTAPI_URL}/automl/job" if use_automl else f"{FASTAPI_URL}/job/"
+
+        if use_automl:
+            dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
+            data = {
+                "dataset_name": dataset_name,
+                "columns": columns,
+                "clustering_algorithms": selected_cluster_algorithms,
+                "dim_reduction_algorithms": dim_algos or None,
+            }
+
+        else:
+            # === Manueller Pfad ===
+            data = {
+                "dataset_name": dataset_name,
+                "columns": columns,
+                "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
+                "preprocess": preprocess,
+                "clustering_params": clustering_params,
+                "preprocessing_params": preprocessing_params
+            }
 
         try:
-            res = requests.post(f"{FASTAPI_URL}/job/", json=data)
+            res = requests.post(cluster_url, json=data)
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")

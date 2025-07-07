@@ -47,8 +47,8 @@ def validate_data(data):
         raise ValueError("Input data must be 2-dimensional (samples, features).")
 
     # Check if numeric
-    if not np.issubdtype(data.dtype, np.number):
-        raise TypeError("Input data must be numeric.")
+    # if not np.issubdtype(data.dtype, np.number):
+    #    raise TypeError("Input data must be numeric.")
 
 async def get_mongodb():
     MONGODB_DB = os.getenv("MONGODB_DB")
@@ -323,7 +323,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
-) -> dict[Hashable, Any]:
+) -> dict[Any, Any]:
     try:
         result_collection = mongodb_database.get_collection("results")
         data_collection = mongodb_database.get_collection("data")

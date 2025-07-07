@@ -1,12 +1,15 @@
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import io
 from datetime import datetime
 import pynisher
-
+import subprocess
+import json
 import pandas as pd
 import pytz
 import requests
-
+import numpy as np
 
 from collections import Counter
 
@@ -15,38 +18,18 @@ from autocluster import get_evaluator
 from autocluster import MetafeatureMapper
 
 from sklearn.base import BaseEstimator
+from sklearn.utils.validation import check_is_fitted
 
-from .celery_conn import celery
+from workers.celery_conn import celery
 
 # Environment variables (wie in deiner Base-Klasse)
-fastapi_host = os.getenv("FASTAPI_HOST", "caas-fastapi")
-fastapi_port = int(os.getenv("FASTAPI_PORT", "8000"))
-fastapi_protocol = os.getenv("FASTAPI_PROTOCOL", "http")
+FASTAPI_HOST = os.getenv("FASTAPI_HOST", "caas-fastapi")
+FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
+FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL", "http")
 
 TIMEZONE = pytz.timezone("UTC")
 
-###
-# 
-# cluster_alg_ls: This is the list of possible clustering algorithms to include within the search space.
-# dim_reduction_alg_ls: This is the list of possible dimension reduction algorithms to include within the search space. 
-#   Dimension reduction is performed before the clustering step. NullModel means no dimension reduction is done.
-# optimizer: There are two options for this, "smac" or "random". "smac" does Bayesian Optimization 
-#   using the SMAC library, while "random" just performs random search optimization.
-# n_evaluations: number of iterations to run, generally the larger the better.
-# cutoff_time: If evaluating a certain configuration takes longer than this value (in seconds), it will be terminated.
-# preprocess_dict: This is important, AutoCluster.fit() uses this dictionary to preprocess the dataset. 
-#   For instance, categorical columns will be one hot encoded, while ordinal columns will encoded as integers.
-# evaluator: This is important, it tells AutoCluster.fit() how to evaluate a clustering result.
-#     evaluator_ls: list of metric to include in a linear combination. 
-#         Choices available are ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"].
-#     weights: how much weights to use for each metric in the linear combination.
-#     clustering_num: A tuple is expected. If clustering result has n_clusters outside this specified 
-#         range, float(inf) will be returned from evaluator.
-#     min_proportion: The proportion of points in each cluster must be at least this value.
-#     min_relative_proportion: The ratio of number points in the smallest cluster to the number of points in the 
-#         largest cluster must be at least this value. By using 'default', min_relative_proportion will be set to  5 * min_proportion.
-# warmstart: Whether or not to use warmstart, examples will be shown below on how to use this.
-# verbose_level: Must be either 0, 1 or 2. The higher the number, the more logs/print statements are used. For normal usage we recommend using 1.
+
 @celery.task(name="automl_worker.run_autocluster", bind=True)
 def run_autocluster(self, *, dataset_name, columns,
                     clustering_algorithms=None,
@@ -56,6 +39,103 @@ def run_autocluster(self, *, dataset_name, columns,
                     evaluator_ls=None):
 
     job_id = self.request.id
+    print(f"[AutoML][{job_id}] Delegating to subprocess...")
+
+    # Parameter an Subprozess übergeben
+    script_path = os.path.abspath(__file__)
+    args = [
+        "python", script_path,  # ruft dieselbe Datei erneut auf
+        job_id,
+        dataset_name,
+        json.dumps(columns),
+        json.dumps({
+            "clustering_algorithms": clustering_algorithms,
+            "dim_reduction_algorithms": dim_reduction_algorithms,
+            "n_evaluations": n_evaluations,
+            "cutoff_time": cutoff_time,
+            "evaluator_ls": evaluator_ls
+        })
+    ]
+
+    try:
+        subprocess.run(args, check=True)
+        return {"status": "submitted", "job_id": job_id}
+    except subprocess.CalledProcessError as e:
+        print(f"[AutoML][{job_id}] ERROR: {e}")
+        return None
+    
+    
+
+def is_json_serializable(obj):
+    try:
+        import json
+        json.dumps(obj)
+        return True
+    except:
+        return False
+
+def sanitize_result_dict(result_dict):
+    cleaned = {}
+    for k, v in result_dict.items():
+        if k in {"smac_obj", "random_optimizer_obj", "clustering_model", "dim_reduction_model", "scaler"}:
+            continue
+        elif k == "optimal_cfg":
+            cleaned[k] = str(v)
+        elif isinstance(v, BaseEstimator):
+            cleaned[k] = str(v)
+        elif hasattr(v, "tolist"):
+            cleaned[k] = v.tolist()
+        elif is_json_serializable(v):
+            cleaned[k] = v
+        else:
+            cleaned[k] = str(v)
+    return cleaned
+
+
+def save_results(self, result, job_id, created_timestamp, started_timestamp):
+    """
+    Save clustering results to FastAPI backend
+    """
+    try:
+        print(f"Saving results for job_id: {job_id}")  # Debug print
+        # Pop labels from result dictionary
+        labels = result.pop("labels")
+        
+        payload = {
+            "job_id": job_id,  # Hier verwenden wir den übergebenen job_id Parameter
+            "dataset_name": self.dataset_name,
+            "columns": self.columns,
+            "created_timestamp": created_timestamp,
+            "started_timestamp": started_timestamp,
+            "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
+            "clustering_algorithm": self.frontend_name,
+            "clustering_params": self.clustering_params,
+            "preprocessing_params": self.preprocessing_params,
+            "labels": labels,
+            "additional_results": result,
+        }
+
+        # Post the result to FastAPI backend
+        url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
+        print(f"Sending results to: {url}")  # Debug print
+        response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
+
+        if response.status_code != 200:
+            print(f"Error saving results: {response.text}")
+            return None
+
+            return response.json()
+    except Exception as e:
+        print(f"Error in save_results: {str(e)}")
+        return None
+            
+
+def run_autocluster_job(job_id, dataset_name, columns,
+                        clustering_algorithms=None,
+                        dim_reduction_algorithms=None,
+                        n_evaluations=50,
+                        cutoff_time=60,
+                        evaluator_ls=None):
 
     print(f"[AutoML][{job_id}] Incoming automl_worker.run_autocluster: dataset_name={dataset_name}, columns={columns}")
 
@@ -64,7 +144,7 @@ def run_autocluster(self, *, dataset_name, columns,
 
     try:
         # === Load dataset ===
-        url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/dataset/{dataset_name}"
+        url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/dataset/{dataset_name}"
         
         print(f"[AutoML][{job_id}] Fetching dataset from {url}")
         
@@ -141,110 +221,107 @@ def run_autocluster(self, *, dataset_name, columns,
 
         cluster = AutoCluster()
         result_dict = cluster.fit(**fit_params)
-        
 
-        print(f"[AutoML][{job_id}] AutoCluster finished successfully.")
-        print(f"[AutoML][{job_id}] Result dictionary received from AutoCluster:")
-        for key, value in result_dict.items():
-            summary = str(value)
-            if isinstance(value, (list, dict)) and len(summary) > 200:
-                summary = summary[:200] + "... (truncated)"
-            print(f"[AutoML][{job_id}]   - {key}: {summary}")
+        optimal_cfg = result_dict["optimal_cfg"]
+        clustering_model = result_dict["clustering_model"]
+        dim_reduction_model = result_dict["dim_reduction_model"]
+        scaler = result_dict["scaler"]
+        metafeatures = result_dict["metafeatures"]
+        used_metafeatures = result_dict["metafeatures_used"]
+        smac_obj = result_dict["smac_obj"]
+
 
 
         # Path mitgeben und graph speichern
         predictions = cluster.predict(df)
-        print(result_dict["optimal_cfg"])
-        print(Counter(predictions))
-
         
 
-        payload = {
-            "job_id": job_id,
-            "columns": columns,
-            "created_timestamp": started_timestamp,
-            "started_timestamp": started_timestamp,
-            "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
-            "clustering_algorithm": "AutoCluster",
-            "clustering_params": {},  # leer, da Autocluster intern konfiguriert
-            "preprocessing_params": {},  # leer, da Autocluster intern konfiguriert"
-            "labels": predictions.tolist(),
-            "additional_results": sanitize_result_dict(result_dict)
-        }
+        print(f"[AutoML][{job_id}] Sending result")
+        # save_results(self, result, job_id, created_timestamp, started_timestamp):
+        try:
+            
+            def sanitize_result_dict(result_dict):
+                def safe_str_or_list(value):
+                    if hasattr(value, "tolist"):
+                        return value.tolist()
+                    elif isinstance(value, (dict, list, int, float, str, type(None))):
+                        return value
+                    return str(value)
 
-        result_url = f"{fastapi_protocol}://{fastapi_host}:{fastapi_port}/result/"
-        print(f"[AutoML][{job_id}] Sending result to {result_url}")
+                return {
+                    "optimal_cfg": str(result_dict.get("optimal_cfg")),
+                    "metafeatures_used": result_dict.get("metafeatures_used", []),
+                    "metafeatures": safe_str_or_list(result_dict.get("metafeatures")),
+                }
+
+            def extract_params_from_model(model):
+                try:
+                    check_is_fitted(model)
+                    return model.get_params()
+                except Exception:
+                    return {}
+
+            # === Prediction ===
+            predictions = cluster.predict(df)
+
+            # === Werte extrahieren ===
+            optimal_cfg = result_dict["optimal_cfg"]
+            clustering_model = result_dict["clustering_model"]
+            scaler = result_dict["scaler"]
+
+            # === Timestamp ===
+            finished_timestamp = datetime.now(TIMEZONE).isoformat()
+
+            # === Payload für POST ===
+            payload = {
+                "job_id": job_id,
+                "dataset_name": dataset_name,
+                "columns": columns,
+                "created_timestamp": started_timestamp,
+                "started_timestamp": started_timestamp,
+                "finished_timestamp": finished_timestamp,
+                "clustering_algorithm": getattr(clustering_model, "__class__", type("Unknown", (), {})).__name__.lower(),
+                "clustering_params": extract_params_from_model(clustering_model),
+                "preprocessing_params": {"scaler": "standard"},
+                "labels": predictions.tolist() if isinstance(predictions, np.ndarray) else list(predictions),
+                "additional_results": sanitize_result_dict(result_dict)
+            }
+
+            # Post the result to FastAPI backend
+            url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
+            print(f"Sending results to: {url}")  # Debug print
+            response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
+
+            if response.status_code != 200:
+                print(f"Error saving results: {response.text}")
+                return None
+
+        except Exception as e:
+            print(f"Error in save_results: {str(e)}")
+            return None
         
-        result_response = requests.post(result_url, json=payload, timeout=10)
-        result_response.raise_for_status()
-
         print(f"[AutoML][{job_id}] Result successfully sent.")
-        return result_response.json()
+        return None
 
     except Exception as e:
         print(f"[AutoML][{job_id}] ERROR: {e}")
         return None
-    
-
-def is_json_serializable(obj):
-    try:
-        import json
-        json.dumps(obj)
-        return True
-    except:
-        return False
-
-def sanitize_result_dict(result_dict):
-    cleaned = {}
-    for k, v in result_dict.items():
-        if k in {"smac_obj", "random_optimizer_obj", "clustering_model", "dim_reduction_model", "scaler"}:
-            continue
-        elif k == "optimal_cfg":
-            cleaned[k] = str(v)
-        elif isinstance(v, BaseEstimator):
-            cleaned[k] = str(v)
-        elif hasattr(v, "tolist"):
-            cleaned[k] = v.tolist()
-        elif is_json_serializable(v):
-            cleaned[k] = v
-        else:
-            cleaned[k] = str(v)
-    return cleaned
 
 
-    backend_name = "bisectingkmeans"
-    frontend_name = "Bisecting KMeans"
+if __name__ == "__main__":
+    import sys
+    import json
 
-    def __init__(self, dataset_name, columns, n_clusters=8, **params):
-        super().__init__(dataset_name, columns)
-        self.params["n_clusters"] = n_clusters
-        self.params.update(params)
+    job_id = sys.argv[1]
+    dataset_name = sys.argv[2]
+    columns = json.loads(sys.argv[3])
 
-    @staticmethod
-    def get_default_params():
-        return BisectingKMeans().get_params()
+    optional_params = json.loads(sys.argv[4]) if len(sys.argv) > 4 else {}
 
-    def run(self, data):
-        try:
-            print(f"Running BisectingKMeans with params: {self.params}")
-            model = BisectingKMeans(**self.params)
-            model.fit(data)
-
-            labels = model.labels_
-            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-
-            result = {
-                "labels": labels.tolist(),
-                "cluster_centers": model.cluster_centers_.tolist(),
-                "inertia": float(model.inertia_),
-                "n_iter": model.n_iter_.tolist(),
-                "cluster_sizes": dict(cluster_sizes),
-            }
-
-            return result
-
-        except Exception as e:
-            print(f"Error in BisectingKMeans clustering: {str(e)}")
-            raise
-
+    run_autocluster_job(
+        job_id=job_id,
+        dataset_name=dataset_name,
+        columns=columns,
+        **optional_params
+    )
 

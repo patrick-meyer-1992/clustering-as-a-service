@@ -19,10 +19,10 @@ RUN grep -v '^autocluster' /app/automl-requirements.txt > /tmp/requirements.txt 
     pip install --no-cache-dir --upgrade -r /tmp/requirements.txt
 
 RUN pip install git+https://github.com/wywongbd/autocluster.git@master && \
-    pip show autocluster6
+    pip show autocluster
 
 RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
 
-CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=threads", "--concurrency=1"]
+CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
