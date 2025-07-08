@@ -1,6 +1,7 @@
 import io
 import os
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 import pandas as pd
@@ -345,17 +346,34 @@ async def get_result_table(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
+class ResultField(str, Enum):
+    job_id = "job_id"
+    dataset_name = "dataset_name"
+    columns = "columns"
+    created_timestamp = "created_timestamp"
+    started_timestamp = "started_timestamp"
+    finished_timestamp = "finished_timestamp"
+    clustering_algorithm = "clustering_algorithm"
+    clustering_params = "clustering_params"
+    preprocessing_params = "preprocessing_params"
+    labels = "labels"
+    additional_results = "additional_results"
+
+
 @app.get("/result/{job_id}/raw")
 async def get_result_raw(
     job_id: str,
+    field: ResultField | None = Query(
+        "labels", title="The field to return from the result. If not set, only the labels are returned."
+    ),
     mongodb_database=Depends(get_mongodb),
-) -> list[int | None]:
+) -> Any:
     try:
         result_collection = mongodb_database.get_collection("results")
-        result = await result_collection.find_one({"job_id": job_id})
+        result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
         if not result:
             raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
-        return result.get("labels")
+        return result.get(field)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 

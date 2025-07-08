@@ -372,12 +372,27 @@ elif job_select_mode == "Job-Historie":
 
 presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Graph", "Tabelle"])
 
+if presentation == "Graph" and input_job_id:
+    url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
+    available_result_columns = requests.get(url, params={"field": "columns"}).json()
+    selected_result_columns = st.multiselect(
+        "Welche Spalten sollen für den Graphen verwendet werden?",
+        options=available_result_columns,
+        default=available_result_columns[:2],
+        max_selections=2,
+    )
+
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Graph": "graph"}
     pres = mapping[presentation]
     url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
     try:
-        resp = requests.get(url)
+        params = (
+            None
+            if pres == "table"
+            else {"x_column": selected_result_columns[0], "y_column": selected_result_columns[1]}
+        )
+        resp = requests.get(url, params=params)
         if resp.status_code == 200:
             data = resp.json()
             # Präsentation auf voller Breite
