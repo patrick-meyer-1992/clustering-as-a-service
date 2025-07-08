@@ -237,7 +237,9 @@ def parse_params(params: dict[str, Any]) -> dict[str, Any]:
     for key, value in params.items():
         if not isinstance(value, str):
             continue
-        if value.lower() == "none":
+        if value.lower() == "inf" or value.lower() == "-inf":
+            params[key] = float(value)
+        elif value.lower() == "none":
             params[key] = None
         elif value.lower() in ["true", "false"]:
             params[key] = value.lower() == "true"
