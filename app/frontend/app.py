@@ -1,10 +1,9 @@
 import io
-import json
 import os
 import sys
 import time
+from typing import Literal, get_args
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -12,6 +11,7 @@ import streamlit as st
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
+from clustering.preprocessing_params import PreProcessingParams
 
 FASTAPI_HOST = os.getenv("FASTAPI_HOST")
 FASTAPI_PORT = os.getenv("FASTAPI_PORT")
@@ -48,13 +48,29 @@ def get_available_clustering_algorithms():
     Dynamically loads all clustering algorithms from the clustering directory.
     Excludes abstract base class.
     """
+
     algorithms = {
-        getattr(wrappers, algo).frontend_name: getattr(wrappers, algo).backend_name
+        getattr(wrappers, algo).frontend_name: getattr(wrappers, algo)
         for algo in dir(wrappers)
         if algo.endswith("Wrapper")
     }
 
     return algorithms
+
+
+def parse_params_value(value) -> str | int | float | bool | None:
+    if not isinstance(value, str):
+        return value
+    if value.lower() == "none":
+        return None
+    elif value.lower() in ["true", "false"]:
+        return value.lower() == "true"
+    elif value.isdigit():
+        return int(value)
+    elif value.replace(".", "", 1).isdigit():
+        return float(value)
+    else:
+        return value
 
 
 # --- Upload Section ---
@@ -164,26 +180,31 @@ if st.session_state["dataset_name"]:
     if use_automl:
         # Mehrfachauswahl für Clustering-Algorithmen
         available_cluster_algorithms = [
-            "KMeans", "GaussianMixture", "Birch",
-            "MiniBatchKMeans", "AgglomerativeClustering", "SpectralClustering"
+            "KMeans",
+            "GaussianMixture",
+            "Birch",
+            "MiniBatchKMeans",
+            "AgglomerativeClustering",
+            "SpectralClustering",
         ]
-        selected_cluster_algorithms = st.multiselect("Clustering-Algorithmen auswählen", available_cluster_algorithms, default=available_cluster_algorithms)
+        selected_cluster_algorithms = st.multiselect(
+            "Clustering-Algorithmen auswählen", available_cluster_algorithms, default=available_cluster_algorithms
+        )
 
         # Mehrfachauswahl für Dimensionality Reduction
-        available_dim_reduction = [
-            "TSNE", "PCA", "IncrementalPCA",
-            "KernelPCA", "FastICA", "TruncatedSVD"
-        ]
-        selected_dim_reduction = st.multiselect("Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction)
+        available_dim_reduction = ["TSNE", "PCA", "IncrementalPCA", "KernelPCA", "FastICA", "TruncatedSVD"]
+        selected_dim_reduction = st.multiselect(
+            "Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction
+        )
 
         # Mehrfachauswahl für Evaluator
-        available_evaluators = [
-            "silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"
-        ]
+        available_evaluators = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
         selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
 
         n_evaluations = st.slider("Anzahl AutoML Evaluationen", min_value=10, max_value=200, value=50, step=10)
-        cutoff_time = st.slider("Maximale Laufzeit pro Evaluation (Sekunden)", min_value=10, max_value=300, value=60, step=10)
+        cutoff_time = st.slider(
+            "Maximale Laufzeit pro Evaluation (Sekunden)", min_value=10, max_value=300, value=60, step=10
+        )
 
     else:
         # Dynamic algorithm selection
@@ -191,9 +212,36 @@ if st.session_state["dataset_name"]:
         clustering_algorithm = st.selectbox(
             "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
         )
+        clustering_params = clustering_algorithms.get(clustering_algorithm).get_default_params()
+        chosen_clustering_params = {}
+        with st.expander("Clustering-Parameter konfigurieren"):
+            for k, v in clustering_params.items():
+                chosen_clustering_params[k] = st.text_input(label=k, value=str(v))
+
         preprocess = st.checkbox("Preprocessing", value=True)
-        clustering_params = {}
-        preprocessing_params = {}
+        preprocessing_params = PreProcessingParams().model_dump()
+        chosen_preprocessing_params = {}
+        allowed_values = {}
+        for name, field in PreProcessingParams.model_fields.items():
+            annotation = field.annotation
+            # Only process Literal fields
+            if getattr(annotation, "__origin__", None) is Literal:
+                allowed_values[name] = get_args(annotation)
+
+        if preprocess:
+            with st.expander("Preprocessing-Parameter konfigurieren"):
+                for k, v in preprocessing_params.items():
+                    if k in allowed_values:
+                        chosen_preprocessing_params[k] = parse_params_value(
+                            st.selectbox(label=k, options=allowed_values[k])
+                        )
+                    elif isinstance(v, bool):
+                        chosen_preprocessing_params[k] = parse_params_value(
+                            st.selectbox(label=k, options=["False", "True"])
+                        )
+                    else:
+                        chosen_preprocessing_params[k] = parse_params_value(st.text_input(label=k, value=str(v)))
+                chosen_preprocessing_params = PreProcessingParams(**chosen_preprocessing_params)
 
     if st.button("Clustering starten"):
         dataset_name = st.session_state["dataset_name"]
@@ -210,7 +258,7 @@ if st.session_state["dataset_name"]:
                 "dim_reduction_algorithms": selected_dim_reduction or None,
                 "evaluator_ls": selected_evaluators,
                 "n_evaluations": n_evaluations,
-                "cutoff_time": cutoff_time
+                "cutoff_time": cutoff_time,
             }
 
         else:
@@ -218,10 +266,10 @@ if st.session_state["dataset_name"]:
             data = {
                 "dataset_name": dataset_name,
                 "columns": columns,
-                "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
+                "clustering_algorithm": clustering_algorithms.get(clustering_algorithm).backend_name,
                 "preprocess": preprocess,
-                "clustering_params": clustering_params,
-                "preprocessing_params": preprocessing_params
+                "clustering_params": chosen_clustering_params,
+                "preprocessing_params": chosen_preprocessing_params.model_dump() if preprocess else None,
             }
 
         try:
@@ -322,7 +370,7 @@ elif job_select_mode == "Job-Historie":
     else:
         st.info("Keine Jobs vorhanden.")
 
-presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Graph"])
+presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Graph", "Tabelle"])
 
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Graph": "graph"}

@@ -34,14 +34,14 @@ class PreProcessingParams(BaseModel):
         default=None,
         description="Choose 'quantile', 'power' or None for no transformation.",
     )
-    imputation_strategy: Literal["mean", "median", "none"] = Field(
+    imputation_strategy: Literal["mean", "median", None] = Field(
         title="Strategy for handling missing values",
         default="mean",
         description="Choose 'mean', 'median' or 'none' for the imputation strategy.",
     )
-    outlier_removal: Literal["none", "zscore", "iqr"] = Field(
+    outlier_removal: Literal[None, "zscore", "iqr"] = Field(
         title="Method for outlier removal",
-        default="none",
+        default=None,
         description="Choose 'none', 'zscore' or 'iqr' for the outlier removal method.",
     )
     outlier_threshold: float = Field(
@@ -49,9 +49,9 @@ class PreProcessingParams(BaseModel):
         default=3.0,
         description="Choose the threshold for outlier detection. Only used if outlier_removal is 'zscore'.",
     )
-    feature_selection: Literal["none", "low_variance", "constant"] = Field(
+    feature_selection: Literal[None, "low_variance", "constant"] = Field(
         title="Method for feature selection",
-        default="none",
+        default=None,
         description="Choose 'none', 'low_variance' or 'constant' for the feature selection method.",
     )
     variance_threshold: float = Field(
@@ -70,10 +70,10 @@ class PreProcessingParams(BaseModel):
                     "use_pca": False,
                     "pca_components": 10,
                     "transform_type": None,
-                    "imputation_strategy": "none",
-                    "outlier_removal": "none",  # "none", "zscore", "iqr"
+                    "imputation_strategy": None,
+                    "outlier_removal": None,  # None, "zscore", "iqr"
                     "outlier_threshold": 3.0,  # only for zscore
-                    "feature_selection": "none",  # "none", "low_variance", "constant"
+                    "feature_selection": None,  # None, "low_variance", "constant"
                     "variance_threshold": 0.0,  # for low_variance
                 }
             ]
