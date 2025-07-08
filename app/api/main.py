@@ -396,12 +396,15 @@ async def get_result_graph(
 
         if df.shape[1] != 2:
             raise HTTPException(status_code=400, detail="Data is not 2D")
+        # Ensure legend items appear in a certain order by specifying category_orders
+        unique_labels = sorted(set(labels))
         fig = px.scatter(
             x=df[x_column],
             y=df[y_column],
             color=labels,
             title=f"Clustering: {result.get('clustering_algorithm')}",
             labels={"x": x_column, "y": y_column},
+            category_orders={"color": unique_labels},
         )
         return fig.to_dict()
     except Exception as e:
