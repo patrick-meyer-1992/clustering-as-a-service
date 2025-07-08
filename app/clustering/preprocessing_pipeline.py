@@ -67,7 +67,7 @@ class PreprocessingPipeline:
 
     def _impute(self, X: np.ndarray) -> np.ndarray:
         strategy = self.params.imputation_strategy
-        if strategy == "none":
+        if strategy is None:
             return X
         df = pd.DataFrame(X)
         if strategy == "mean":
@@ -79,7 +79,7 @@ class PreprocessingPipeline:
     def _remove_outliers(self, X: np.ndarray) -> np.ndarray:
         strategy = self.params.outlier_removal
         thr = self.params.outlier_threshold
-        if strategy == "none":
+        if strategy is None:
             return X
         if strategy == "zscore":
             z = np.abs((X - X.mean(0)) / X.std(0))
@@ -95,7 +95,7 @@ class PreprocessingPipeline:
     def _feature_select(self, X: np.ndarray) -> np.ndarray:
         fs = self.params.feature_selection
         thr = self.params.variance_threshold
-        if fs == "none":
+        if fs is None:
             return X
         if fs == "constant":
             selector = VarianceThreshold(0.0)

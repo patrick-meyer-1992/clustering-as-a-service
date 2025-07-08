@@ -139,7 +139,9 @@ def run_autocluster_job(job_id, dataset_name, columns,
                         evaluator_ls=None):
 
     print(f"[AutoML][{job_id}] Incoming automl_worker.run_autocluster: dataset_name={dataset_name}, columns={columns}, n_evaluations={n_evaluations}, cutoff_time={cutoff_time}")
-
+    print(f"[AutoML][{job_id}] clustering_algorithms: {clustering_algorithms}")
+    print(f"[AutoML][{job_id}] dim_reduction_algorithms: {dim_reduction_algorithms}")
+    print(f"[AutoML][{job_id}] evaluator_ls: {evaluator_ls}")
 
     print("[DEBUG] pynisher has enforce_limits:", hasattr(pynisher, "enforce_limits"))
 
@@ -162,8 +164,7 @@ def run_autocluster_job(job_id, dataset_name, columns,
         # === Configure AutoCluster ===
         if not dim_reduction_algorithms:
             dim_reduction_algorithms = [
-                'TSNE', 'PCA', 'IncrementalPCA',
-                'KernelPCA', 'FastICA', 'TruncatedSVD'
+                'NullModel'
             ]
 
         if not evaluator_ls:
