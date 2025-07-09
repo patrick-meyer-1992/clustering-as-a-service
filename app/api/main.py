@@ -1,6 +1,7 @@
 import io
 import os
 from datetime import datetime
+from enum import Enum
 from typing import Any
 
 import pandas as pd
@@ -72,18 +73,12 @@ async def get_mongodb():
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
     try:
-        # Debugging: Logge den übergebenen dataset_name
-        print(f"Retrieving dataset: {dataset_name}")
-
         # Hole den Datensatz aus MongoDB
         data_collection = mongodb_database.get_collection("data")
         dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
 
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
-
-        # Debugging: Logge die abgerufenen Daten
-        print(f"Dataset retrieved: {dataset}")
 
         # Erstelle einen StreamingResponse für die CSV-Daten
         file_stream = io.StringIO(dataset["data"])
@@ -239,8 +234,27 @@ class JobPostResponse(BaseModel):
     model_config = {"json_schema_extra": {"examples": [{"job_id": "fb231936-1d83-43de-85a4-81c6889dd21c"}]}}
 
 
+def parse_params(params: dict[str, Any]) -> dict[str, Any]:
+    for key, value in params.items():
+        if not isinstance(value, str):
+            continue
+        if value.lower() == "inf" or value.lower() == "-inf":
+            params[key] = float(value)
+        elif value.lower() == "none":
+            params[key] = None
+        elif value.lower() in ["true", "false"]:
+            params[key] = value.lower() == "true"
+        elif value.isdigit():
+            params[key] = int(value)
+        elif value.replace(".", "", 1).isdigit():
+            params[key] = float(value)
+    return params
+
+
 @app.post("/job/")
 async def post_job(req: JobPostRequest) -> JobPostResponse:
+    clustering_params = parse_params(req.clustering_params)
+
     try:
         job = run_clustering_job.delay(
             req.dataset_name,
@@ -248,8 +262,8 @@ async def post_job(req: JobPostRequest) -> JobPostResponse:
             datetime.now(TIMEZONE).isoformat(),
             req.clustering_algorithm,
             req.preprocess,
-            preprocessing_params=req.preprocessing_params.model_dump() if req.preprocessing_params else None,
-            **(req.clustering_params or {}),
+            preprocessing_params=req.preprocessing_params.model_dump() if req.preprocess else None,
+            **(clustering_params),
         )
 
         return JobPostResponse(
@@ -332,17 +346,34 @@ async def get_result_table(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
+class ResultField(str, Enum):
+    job_id = "job_id"
+    dataset_name = "dataset_name"
+    columns = "columns"
+    created_timestamp = "created_timestamp"
+    started_timestamp = "started_timestamp"
+    finished_timestamp = "finished_timestamp"
+    clustering_algorithm = "clustering_algorithm"
+    clustering_params = "clustering_params"
+    preprocessing_params = "preprocessing_params"
+    labels = "labels"
+    additional_results = "additional_results"
+
+
 @app.get("/result/{job_id}/raw")
 async def get_result_raw(
     job_id: str,
+    field: ResultField | None = Query(
+        "labels", title="The field to return from the result. If not set, only the labels are returned."
+    ),
     mongodb_database=Depends(get_mongodb),
-) -> list[int | None]:
+) -> Any:
     try:
         result_collection = mongodb_database.get_collection("results")
-        result = await result_collection.find_one({"job_id": job_id})
+        result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
         if not result:
             raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
-        return result.get("labels")
+        return result.get(field)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
@@ -383,12 +414,15 @@ async def get_result_graph(
 
         if df.shape[1] != 2:
             raise HTTPException(status_code=400, detail="Data is not 2D")
+        # Ensure legend items appear in a certain order by specifying category_orders
+        unique_labels = sorted(set(labels))
         fig = px.scatter(
             x=df[x_column],
             y=df[y_column],
             color=labels,
             title=f"Clustering: {result.get('clustering_algorithm')}",
             labels={"x": x_column, "y": y_column},
+            category_orders={"color": unique_labels},
         )
         return fig.to_dict()
     except Exception as e:
@@ -404,7 +438,9 @@ class ResultPostRequest(BaseModel):
     finished_timestamp: str = Field(description="The finish timestamp", default=...)
     clustering_algorithm: str = Field(description="The clustering algorithm used", default=...)
     clustering_params: dict[str, Any] = Field(description="The parameters for the clustering algorithm", default=...)
-    preprocessing_params: dict[str, Any] = Field(description="The parameters for the preprocessing", default=...)
+    preprocessing_params: PreProcessingParams | None = Field(
+        description="The parameters for the preprocessing", default=...
+    )
     labels: list[int | None] = Field(description="The labels for the dataset", default=...)
     additional_results: dict[str, Any] = Field(description="Additional results from the job", default=...)
     model_config = {

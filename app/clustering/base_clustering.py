@@ -1,4 +1,5 @@
 import io
+import math
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -112,6 +113,7 @@ class BaseClustering(ABC):
         """
         try:
             print(f"Saving results for job_id: {job_id}")  # Debug print
+
             # Pop labels from result dictionary
             labels = result.pop("labels")
 
@@ -129,6 +131,8 @@ class BaseClustering(ABC):
                 "additional_results": result,
             }
 
+            payload = self._sanitize_inf(payload)
+
             # Post the result to FastAPI backend
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
             print(f"Sending results to: {url}")  # Debug print
@@ -142,3 +146,17 @@ class BaseClustering(ABC):
         except Exception as e:
             print(f"Error in save_results: {str(e)}")
             return None
+
+    def _sanitize_inf(self, obj):
+        if isinstance(obj, dict):
+            return {k: self._sanitize_inf(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._sanitize_inf(v) for v in obj]
+        elif isinstance(obj, float):
+            if math.isinf(obj):
+                return "inf" if obj > 0 else "-inf"
+            if math.isnan(obj):
+                return "nan"
+            return obj
+        else:
+            return obj
