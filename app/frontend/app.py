@@ -1,4 +1,3 @@
-import io
 import os
 import sys
 import time
@@ -138,28 +137,28 @@ if st.session_state["dataset_name"]:
 
     # Load columns from selected dataset
     try:
-        if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
-            available_columns = df.columns.tolist()
-        else:
-            # Load dataset from backend if not currently uploaded
-            resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}")
-            if resp.status_code == 200:
-                temp_df = pd.read_csv(io.StringIO(resp.content.decode("utf-8")))
-                available_columns = temp_df.columns.tolist()
-            else:
-                available_columns = []
+        # if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
+        #     available_columns = df.columns.tolist()
+        # else:
+        # Load dataset from backend if not currently uploaded
+        resp = requests.get(f"{FASTAPI_URL}/metadata/{st.session_state['dataset_name']}")
+        available_columns = resp.json().get("columns") if resp.status_code == 200 else []
 
         # Column selection interface
         if available_columns:
             use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
+            col_names = [col.get("name") for col in available_columns]
+            col_allowed_types = [col.get("allowed_types") for col in available_columns]
+
+            # TODO: @Steffen: Hier überarbeitete Spaltenauswahl einfügen
             if use_all_columns:
                 columns = available_columns
-                st.info(f"Verwende alle Spalten: {', '.join(columns)}")
+                st.info(f"Verwende alle Spalten: {', '.join(col_names)}")
             else:
                 columns = st.multiselect(
                     "Spalten für Clustering auswählen",
-                    options=available_columns,
-                    default=available_columns,
+                    options=col_names,
+                    default=col_names,
                 )
                 if not columns:
                     st.warning("Bitte mindestens eine Spalte auswählen!")
@@ -188,29 +187,49 @@ if st.session_state["dataset_name"]:
             "SpectralClustering",
         ]
         selected_cluster_algorithms = st.multiselect(
-            "Clustering-Algorithmen auswählen", available_cluster_algorithms, default=available_cluster_algorithms
+            "Clustering-Algorithmen auswählen",
+            available_cluster_algorithms,
+            default=available_cluster_algorithms,
         )
 
         # Mehrfachauswahl für Dimensionality Reduction
-        available_dim_reduction = ["TSNE", "PCA", "IncrementalPCA", "KernelPCA", "FastICA", "TruncatedSVD"]
+        available_dim_reduction = [
+            "TSNE",
+            "PCA",
+            "IncrementalPCA",
+            "KernelPCA",
+            "FastICA",
+            "TruncatedSVD",
+        ]
         selected_dim_reduction = st.multiselect(
-            "Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction
+            "Dimensionality Reduction auswählen",
+            available_dim_reduction,
+            default=available_dim_reduction,
         )
 
         # Mehrfachauswahl für Evaluator
-        available_evaluators = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
+        available_evaluators = [
+            "silhouetteScore",
+            "daviesBouldinScore",
+            "calinskiHarabaszScore",
+        ]
         selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
 
         n_evaluations = st.slider("Anzahl AutoML Evaluationen", min_value=10, max_value=200, value=50, step=10)
         cutoff_time = st.slider(
-            "Maximale Laufzeit pro Evaluation (Sekunden)", min_value=10, max_value=300, value=60, step=10
+            "Maximale Laufzeit pro Evaluation (Sekunden)",
+            min_value=10,
+            max_value=300,
+            value=60,
+            step=10,
         )
 
     else:
         # Dynamic algorithm selection
         clustering_algorithms = get_available_clustering_algorithms()
         clustering_algorithm = st.selectbox(
-            "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
+            "Clustering-Algorithmus auswählen",
+            options=sorted(clustering_algorithms.keys()),
         )
         clustering_params = clustering_algorithms.get(clustering_algorithm).get_default_params()
         chosen_clustering_params = {}
@@ -241,7 +260,9 @@ if st.session_state["dataset_name"]:
                         )
                     else:
                         chosen_preprocessing_params[k] = parse_params_value(st.text_input(label=k, value=str(v)))
-                chosen_preprocessing_params = PreProcessingParams(**chosen_preprocessing_params)
+                # chosen_preprocessing_params = PreProcessingParams(
+                #     **chosen_preprocessing_params
+                # )
 
     if st.button("Clustering starten"):
         dataset_name = st.session_state["dataset_name"]
@@ -253,7 +274,7 @@ if st.session_state["dataset_name"]:
             dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
             data = {
                 "dataset_name": dataset_name,
-                "columns": columns,
+                "columns": col_names,
                 "clustering_algorithms": selected_cluster_algorithms,
                 "dim_reduction_algorithms": selected_dim_reduction or None,
                 "evaluator_ls": selected_evaluators,
@@ -262,14 +283,23 @@ if st.session_state["dataset_name"]:
             }
 
         else:
+            if preprocess:
+                filtered_preprocessing_params = {k: v for k, v in chosen_preprocessing_params.items() if v is not None}
+            else:
+                filtered_preprocessing_params = None
             # === Manueller Pfad ===
+            # TODO: @Steffen: default_col_objects erstmal nur Platzhalter.
+            # Später ersetzen durch vom Nutzer ausgewählte Spalten (inkl. Typen)
+            default_col_objects = [
+                {"name": col.get("name"), "type": col.get("allowed_types")[0]} for col in available_columns
+            ]
             data = {
                 "dataset_name": dataset_name,
-                "columns": columns,
+                "columns": default_col_objects,
                 "clustering_algorithm": clustering_algorithms.get(clustering_algorithm).backend_name,
                 "preprocess": preprocess,
                 "clustering_params": chosen_clustering_params,
-                "preprocessing_params": chosen_preprocessing_params.model_dump() if preprocess else None,
+                "preprocessing_params": (filtered_preprocessing_params),
             }
 
         try:
@@ -375,6 +405,7 @@ presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Grap
 if presentation == "Graph" and input_job_id:
     url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
     available_result_columns = requests.get(url, params={"field": "columns"}).json()
+    available_result_columns = [col.get("name") for col in available_result_columns]
     selected_result_columns = st.multiselect(
         "Welche Spalten sollen für den Graphen verwendet werden?",
         options=available_result_columns,
@@ -386,11 +417,18 @@ if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Graph": "graph"}
     pres = mapping[presentation]
     url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
+
+    if len(selected_result_columns) != 2 and pres == "graph":
+        st.error("Für den Graphen müssen genau zwei Spalten ausgewählt werden.")
+        st.stop()
     try:
         params = (
             None
             if pres == "table"
-            else {"x_column": selected_result_columns[0], "y_column": selected_result_columns[1]}
+            else {
+                "x_column": selected_result_columns[0],
+                "y_column": selected_result_columns[1],
+            }
         )
         resp = requests.get(url, params=params)
         if resp.status_code == 200:
