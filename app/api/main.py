@@ -346,10 +346,36 @@ def parse_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/job/")
-async def post_job(req: JobPostRequest) -> JobPostResponse:
+async def post_job(
+    req: JobPostRequest,
+    mongodb_database=Depends(get_mongodb),
+) -> JobPostResponse:
     clustering_params = parse_params(req.clustering_params)
 
-    print(f"Received request: {req}")
+    data_collection = mongodb_database.get_collection("data")
+    # Check if the dataset exists
+    exists = await data_collection.find_one({"dataset_name": req.dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Fetch the specified fields from the dataset
+    dataset = await data_collection.find_one({"dataset_name": req.dataset_name}, {"_id": 0, "columns": 1})
+
+    # Check if requested columns exist for the dataset and their types are valid
+    for request_column in req.columns:
+        if request_column["name"] not in [col["name"] for col in dataset["columns"]]:
+            print(request_column["name"])
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' not found in dataset '{req.dataset_name}'",
+            )
+        allowed_types = [col["allowed_types"] for col in dataset["columns"] if col["name"] == request_column["name"]][0]
+
+        if request_column["type"] not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' does not support type '{request_column['type']}'.",
+            )
 
     try:
         job = run_clustering_job.delay(
