@@ -136,40 +136,64 @@ else:
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
 
-    # Load columns from selected dataset
+    # Lade Spalten und Typen aus Backend
+    columns_type_info = []
     try:
-        if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
-            available_columns = df.columns.tolist()
+        resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}/columns_type")
+        if resp.status_code == 200:
+            columns_type_info = resp.json()["columns"]
         else:
-            # Load dataset from backend if not currently uploaded
-            resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}")
-            if resp.status_code == 200:
-                temp_df = pd.read_csv(io.StringIO(resp.content.decode("utf-8")))
-                available_columns = temp_df.columns.tolist()
-            else:
-                available_columns = []
-
-        # Column selection interface
-        if available_columns:
-            use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
-            if use_all_columns:
-                columns = available_columns
-                st.info(f"Verwende alle Spalten: {', '.join(columns)}")
-            else:
-                columns = st.multiselect(
-                    "Spalten für Clustering auswählen",
-                    options=available_columns,
-                    default=available_columns,
-                )
-                if not columns:
-                    st.warning("Bitte mindestens eine Spalte auswählen!")
-        else:
-            st.error("Keine Spalten im Datensatz gefunden!")
-            columns = []
-
+            st.error("Fehler beim Laden der Spalteninformationen!")
+            columns_type_info = []
     except Exception as e:
-        st.error(f"Fehler beim Laden der Spalten: {e}")
-        columns = []
+        st.error(f"Fehler beim Laden der Spalteninformationen: {e}")
+        columns_type_info = []
+
+    # Initialisiere Auswahl-State
+    if "column_selection" not in st.session_state or st.session_state["dataset_name"] != st.session_state.get("last_column_selection_dataset", ""):
+        st.session_state["column_selection"] = {
+            info["column"]: {
+                "use": True,
+                "type": info["detected_type"],
+            }
+            for info in columns_type_info
+        }
+        st.session_state["last_column_selection_dataset"] = st.session_state["dataset_name"]
+
+    # Spaltenauswahl-Tabelle
+    if columns_type_info:
+        st.markdown("**Spaltenauswahl**")
+        cols = st.columns([1, 3, 2])
+        cols[0].markdown("**Verwenden**")
+        cols[1].markdown("**Spaltenname**")
+        cols[2].markdown("**Typ**")
+        for info in columns_type_info:
+            col_name = info["column"]
+            use = st.session_state["column_selection"][col_name]["use"]
+            detected_type = st.session_state["column_selection"][col_name]["type"]
+            can_switch = info["can_switch"]
+            # Checkbox für verwenden
+            new_use = cols[0].checkbox("", value=use, key=f"use_{col_name}")
+            st.session_state["column_selection"][col_name]["use"] = new_use
+            # Spaltenname
+            cols[1].markdown(f"{col_name}")
+            # Typauswahl
+            if can_switch:
+                new_type = cols[2].selectbox(
+                    "",
+                    options=["numerisch", "kategorial"],
+                    index=0 if detected_type == "numerisch" else 1,
+                    key=f"type_{col_name}"
+                )
+                st.session_state["column_selection"][col_name]["type"] = new_type
+            else:
+                cols[2].markdown(f"{detected_type}")
+    else:
+        st.error("Keine Spalten im Datensatz gefunden!")
+
+    # Spalten für Clustering
+    columns = [col for col, sel in st.session_state["column_selection"].items() if sel["use"]]
+    column_types = {col: sel["type"] for col, sel in st.session_state["column_selection"].items() if sel["use"]}
 
     use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
 

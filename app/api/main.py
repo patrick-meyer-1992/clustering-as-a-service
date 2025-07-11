@@ -1,17 +1,17 @@
+
 import io
 import os
 from datetime import datetime
 from enum import Enum
 from typing import Any
-
 import pandas as pd
 import plotly.express as px
 import pytz
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
@@ -26,6 +26,25 @@ ALGORITHM_MAP = {
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
 
+async def get_mongodb():
+    MONGODB_DB = os.getenv("MONGODB_DB")
+    MONGODB_HOST = os.getenv("MONGODB_HOST")
+    MONGODB_PORT = os.getenv("MONGODB_PORT")
+
+    # For testing purposes, you can set MONGODB_URL in your environment variables
+    MONGODB_URL = os.getenv("MONGODB_URL", None)
+
+    if MONGODB_URL:
+        mongodb_client = AsyncMongoClient(MONGODB_URL)
+        print(f"Using MongoDB URL: {MONGODB_URL}")
+    else:
+        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
+
+    mongodb_database = mongodb_client.get_database(MONGODB_DB)
+    try:
+        yield mongodb_database
+    finally:
+        await mongodb_client.close()
 
 def validate_data(data):
     # Check for None
@@ -47,27 +66,88 @@ def validate_data(data):
     # Check if numeric
     # if not np.issubdtype(data.dtype, np.number):
     #    raise TypeError("Input data must be numeric.")
+class ColumnTypeInfo(BaseModel):
+    column: str
+    detected_type: str  # "numerisch" oder "kategorial"
+    can_switch: bool    # True, wenn beide Typen sinnvoll sind
 
+class ColumnsTypeResponse(BaseModel):
+    columns: list[ColumnTypeInfo]
 
-async def get_mongodb():
-    MONGODB_DB = os.getenv("MONGODB_DB")
-    MONGODB_HOST = os.getenv("MONGODB_HOST")
-    MONGODB_PORT = os.getenv("MONGODB_PORT")
-
-    # For testing purposes, you can set MONGODB_URL in your environment variables
-    MONGODB_URL = os.getenv("MONGODB_URL", None)
-
-    if MONGODB_URL:
-        mongodb_client = AsyncMongoClient(MONGODB_URL)
-        print(f"Using MongoDB URL: {MONGODB_URL}")
+def detect_column_type(series: pd.Series) -> tuple[str, bool]:
+    """
+    Gibt (Typ, can_switch) zurück.
+    Typ: "numerisch" oder "kategorial"
+    can_switch: True, wenn sowohl Zahlen als auch Strings vorkommen und beides sinnvoll wäre.
+    """
+    num_count = pd.to_numeric(series, errors="coerce").notnull().sum()
+    str_count = series.apply(lambda x: isinstance(x, str)).sum()
+    total = len(series)
+    unique_count = series.nunique(dropna=True)
+    # Heuristik: Wenn >80% numerisch, dann numerisch. Wenn >80% Strings, dann kategorial.
+    # Wenn gemischt, dann can_switch=True
+    if num_count / total > 0.8 and unique_count > 10:
+        detected_type = "numerisch"
+    elif str_count / total > 0.8 and unique_count < total * 0.5:
+        detected_type = "kategorial"
     else:
-        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
+        detected_type = "gemischt"
+    can_switch = detected_type == "gemischt"
+    # Default: Wenn gemischt, dann "numerisch" als Startwert, sonst detected_type
+    if detected_type == "gemischt":
+        # Wenn viele Zahlen, dann numerisch, sonst kategorial
+        detected_type = "numerisch" if num_count > str_count else "kategorial"
+    return detected_type, can_switch
 
-    mongodb_database = mongodb_client.get_database(MONGODB_DB)
+
+@app.get("/dataset/{dataset_name}/columns_type", response_model=ColumnsTypeResponse)
+async def get_columns_type(dataset_name: str, mongodb_database=Depends(get_mongodb)):
+    """
+    Gibt für jeden Spaltennamen den automatisch erkannten Typ und ob ein Wechsel möglich ist zurück.
+    """
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    logger.info(f"[columns_type] Anfrage für dataset_name: '{dataset_name}'")
+    # Debug: Zeige Typ und Inhalt der Datenbank-Dependency
+    logger.info(f"[columns_type] Typ von mongodb_database: {type(mongodb_database)}")
+    logger.info(f"[columns_type] Datenbankname: {getattr(mongodb_database, 'name', None)}")
+    if not dataset_name:
+        logger.warning("[columns_type] Kein Datensatzname übergeben!")
+        raise HTTPException(status_code=400, detail="Kein Datensatzname übergeben!")
     try:
-        yield mongodb_database
-    finally:
-        await mongodb_client.close()
+        data_collection = mongodb_database.get_collection("data")
+        # Debug: Zeige alle Datensatznamen in der Collection
+        all_datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=100)
+        logger.info(f"[columns_type] Alle Datensatznamen in Collection: {[d['dataset_name'] for d in all_datasets]}")
+        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+        logger.info(f"[columns_type] Ergebnis von find_one: {dataset}")
+        if not dataset:
+            logger.warning(f"[columns_type] Kein Datensatz gefunden für: '{dataset_name}'")
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        logger.info(f"[columns_type] Datensatz gefunden für: '{dataset_name}'")
+        try:
+            df = pd.read_csv(io.StringIO(dataset["data"]))
+        except Exception as e:
+            logger.error(f"[columns_type] Fehler beim Parsen der CSV: {e}")
+            raise HTTPException(status_code=400, detail=f"Fehler beim Parsen der CSV: {e}")
+        result = []
+        for col in df.columns:
+            detected_type, can_switch = detect_column_type(df[col])
+            result.append(ColumnTypeInfo(column=col, detected_type=detected_type, can_switch=can_switch))
+        logger.info(f"[columns_type] Spalten erkannt: {[r.column for r in result]}")
+        return ColumnsTypeResponse(columns=result)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"[columns_type] Unerwarteter Fehler: {e}")
+        raise HTTPException(status_code=500, detail=f"Fehler bei Spaltentyp-Erkennung: {e}")
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from pymongo import AsyncMongoClient
+from workers.celery_conn import celery
+from workers.tasks import run_clustering_job
+
+# Die folgenden Zeilen wurden entfernt, da sie doppelt waren und die Dependency Injection gestört haben.
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
@@ -137,7 +217,9 @@ async def put_dataset(
                 "data": content.decode("utf-8"),  # Store the CSV content as a string
             }
         )
-
+        # Debug: Zeige alle Datensatznamen nach dem Einfügen
+        all_datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=100)
+        print(f"[put_dataset] Alle Datensatznamen nach Insert: {[d['dataset_name'] for d in all_datasets]}")
         return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
