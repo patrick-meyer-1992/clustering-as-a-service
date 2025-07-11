@@ -80,23 +80,20 @@ def detect_column_type(series: pd.Series) -> tuple[str, bool]:
     Typ: "numerisch" oder "kategorial"
     can_switch: True, wenn sowohl Zahlen als auch Strings vorkommen und beides sinnvoll wäre.
     """
-    num_count = pd.to_numeric(series, errors="coerce").notnull().sum()
-    str_count = series.apply(lambda x: isinstance(x, str)).sum()
-    total = len(series)
-    unique_count = series.nunique(dropna=True)
-    # Heuristik: Wenn >80% numerisch, dann numerisch. Wenn >80% Strings, dann kategorial.
-    # Wenn gemischt, dann can_switch=True
-    if num_count / total > 0.8 and unique_count > 10:
+    # Pandas-Typ-Erkennung
+    import pandas.api.types as ptypes
+    if ptypes.is_numeric_dtype(series):
         detected_type = "numerisch"
-    elif str_count / total > 0.8 and unique_count < total * 0.5:
-        detected_type = "kategorial"
+        can_switch = False
     else:
-        detected_type = "gemischt"
-    can_switch = detected_type == "gemischt"
-    # Default: Wenn gemischt, dann "numerisch" als Startwert, sonst detected_type
-    if detected_type == "gemischt":
-        # Wenn viele Zahlen, dann numerisch, sonst kategorial
-        detected_type = "numerisch" if num_count > str_count else "kategorial"
+        detected_type = "kategorial"
+        can_switch = False
+    # Optionale Umschaltbarkeit: Wenn dtype "object" und >50% numerisch, Umschaltmöglichkeit anbieten
+    if ptypes.is_object_dtype(series):
+        num_count = pd.to_numeric(series, errors="coerce").notnull().sum()
+        total = len(series)
+        if num_count / total > 0.5:
+            can_switch = True
     return detected_type, can_switch
 
 

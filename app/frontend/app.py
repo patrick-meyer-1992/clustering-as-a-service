@@ -163,31 +163,52 @@ if st.session_state["dataset_name"]:
     # Spaltenauswahl-Tabelle
     if columns_type_info:
         st.markdown("**Spaltenauswahl**")
-        cols = st.columns([1, 3, 2])
-        cols[0].markdown("**Verwenden**")
-        cols[1].markdown("**Spaltenname**")
-        cols[2].markdown("**Typ**")
+        # Checkbox zum schnellen Auswählen aller Spalten als eigene Zeile
+        all_selected = all(st.session_state["column_selection"][col]["use"] for col in st.session_state["column_selection"])
+        select_all = st.checkbox("Alle Spalten auswählen", value=all_selected, key="select_all_columns")
+        # Synchronisiere Einzel-Checkboxen, wenn "Alle auswählen" geändert wurde
+        if select_all != all_selected:
+            for col in st.session_state["column_selection"]:
+                st.session_state["column_selection"][col]["use"] = select_all
+
+        # Tabellen-Header
+        header = st.columns([1, 3, 2])
+        header[0].markdown("**Verwenden**")
+        header[1].markdown("**Spaltenname**")
+        header[2].markdown("**Typ**")
+
+        # Jede Spalte als eigene Zeile, immer sauber ausgerichtet
         for info in columns_type_info:
             col_name = info["column"]
             use = st.session_state["column_selection"][col_name]["use"]
             detected_type = st.session_state["column_selection"][col_name]["type"]
             can_switch = info["can_switch"]
+            row = st.columns([1, 3, 2])
             # Checkbox für verwenden
-            new_use = cols[0].checkbox("", value=use, key=f"use_{col_name}")
+            new_use = row[0].checkbox("", value=use, key=f"use_{col_name}")
             st.session_state["column_selection"][col_name]["use"] = new_use
             # Spaltenname
-            cols[1].markdown(f"{col_name}")
-            # Typauswahl
+            row[1].markdown(f"{col_name}")
+            # Typauswahl: Dropdown immer anzeigen, aber bei nicht-umschaltbar disabled
+            options = ["numerisch", "kategorial"]
+            index = 0 if detected_type == "numerisch" else 1
             if can_switch:
-                new_type = cols[2].selectbox(
+                new_type = row[2].selectbox(
                     "",
-                    options=["numerisch", "kategorial"],
-                    index=0 if detected_type == "numerisch" else 1,
+                    options=options,
+                    index=index,
                     key=f"type_{col_name}"
                 )
                 st.session_state["column_selection"][col_name]["type"] = new_type
             else:
-                cols[2].markdown(f"{detected_type}")
+                # Dropdown anzeigen, aber disabled
+                row[2].selectbox(
+                    "",
+                    options=options,
+                    index=index,
+                    key=f"type_{col_name}",
+                    disabled=True
+                )
     else:
         st.error("Keine Spalten im Datensatz gefunden!")
 
