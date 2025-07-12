@@ -28,10 +28,10 @@ DEFAULT_PREPROCESSING_PARAMS = {
     "use_pca": False,
     "pca_components": 10,
     "transform_type": None,
-    "imputation_strategy": "none",
-    "outlier_removal": "none",  # "none", "zscore", "iqr"
+    "imputation_strategy": None,
+    "outlier_removal": None,  # None, "zscore", "iqr"
     "outlier_threshold": 3.0,  # only for zscore
-    "feature_selection": "none",  # "none", "low_variance", "constant"
+    "feature_selection": None,  # None, "low_variance", "constant"
     "variance_threshold": 0.0,  # for low_variance
 }
 
@@ -43,7 +43,9 @@ class BaseClustering(ABC):
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         self.clustering_params = clustering_params
         self.dataset_name = dataset_name
-        self.columns = columns
+        # TODO: @Ersel: Hier wird jetzt ein dict statt einer Liste erwartet.
+        # Dieses dict kann für die Codierung der Spalten verwendet werden.
+        self.columns: dict[str, str] = columns
         self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
@@ -60,7 +62,7 @@ class BaseClustering(ABC):
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
             # Nur ausgewählte Spalten verwenden
-            return df[self.columns].to_numpy()
+            return df[[col.get("name") for col in self.columns]].to_numpy()
         except Exception as e:
             print(f"Error loading data: {str(e)}")
             raise
@@ -136,7 +138,10 @@ class BaseClustering(ABC):
             # Post the result to FastAPI backend
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
             print(f"Sending results to: {url}")  # Debug print
-            response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
+            response = requests.post(
+                f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/",
+                json=payload,
+            )
 
             if response.status_code != 200:
                 print(f"Error saving results: {response.text}")
