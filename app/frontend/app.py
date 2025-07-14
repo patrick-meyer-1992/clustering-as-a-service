@@ -1,4 +1,3 @@
-import io
 import os
 import sys
 import time
@@ -137,35 +136,36 @@ if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
 
     # Lade Spalten und Typen aus Backend
-    columns_type_info = []
+    available_columns = []
     try:
-        resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}/columns_type")
-        if resp.status_code == 200:
-            columns_type_info = resp.json()["columns"]
-        else:
-            st.error("Fehler beim Laden der Spalteninformationen!")
-            columns_type_info = []
+        resp = requests.get(f"{FASTAPI_URL}/metadata/{st.session_state['dataset_name']}")
+        available_columns = resp.json().get("columns") if resp.status_code == 200 else []
+
     except Exception as e:
         st.error(f"Fehler beim Laden der Spalteninformationen: {e}")
-        columns_type_info = []
+        available_columns = []
 
-    # Initialisiere Auswahl-State
-    if "column_selection" not in st.session_state or st.session_state["dataset_name"] != st.session_state.get("last_column_selection_dataset", ""):
-        st.session_state["column_selection"] = {
-            info["column"]: {
-                "use": True,
-                "type": info["detected_type"],
-            }
-            for info in columns_type_info
-        }
-        st.session_state["last_column_selection_dataset"] = st.session_state["dataset_name"]
-
-    # Spaltenauswahl-Tabelle
-    if columns_type_info:
+    if available_columns:
         st.markdown("**Spaltenauswahl**")
-        # Checkbox zum schnellen Auswählen aller Spalten als eigene Zeile
-        all_selected = all(st.session_state["column_selection"][col]["use"] for col in st.session_state["column_selection"])
+
+        if "column_selection" not in st.session_state or st.session_state["dataset_name"] != st.session_state.get(
+            "last_column_selection_dataset", ""
+        ):
+            st.session_state["column_selection"] = {
+                column["name"]: {
+                    "use": True,
+                    "selected_type": column["allowed_types"][0],
+                    "allowed_types": column["allowed_types"],
+                }
+                for column in available_columns
+            }
+            st.session_state["last_column_selection_dataset"] = st.session_state["dataset_name"]
+
+        all_selected = all(
+            st.session_state["column_selection"][col]["use"] for col in st.session_state["column_selection"]
+        )
         select_all = st.checkbox("Alle Spalten auswählen", value=all_selected, key="select_all_columns")
+
         # Synchronisiere Einzel-Checkboxen, wenn "Alle auswählen" geändert wurde
         if select_all != all_selected:
             for col in st.session_state["column_selection"]:
@@ -178,43 +178,34 @@ if st.session_state["dataset_name"]:
         header[2].markdown("**Typ**")
 
         # Jede Spalte als eigene Zeile, immer sauber ausgerichtet
-        for info in columns_type_info:
-            col_name = info["column"]
+        for col in available_columns:
+            col_name = col["name"]
             use = st.session_state["column_selection"][col_name]["use"]
-            detected_type = st.session_state["column_selection"][col_name]["type"]
-            can_switch = info["can_switch"]
             row = st.columns([1, 3, 2])
             # Checkbox für verwenden
             new_use = row[0].checkbox("", value=use, key=f"use_{col_name}")
             st.session_state["column_selection"][col_name]["use"] = new_use
             # Spaltenname
             row[1].markdown(f"{col_name}")
-            # Typauswahl: Dropdown immer anzeigen, aber bei nicht-umschaltbar disabled
-            options = ["numerisch", "kategorial"]
-            index = 0 if detected_type == "numerisch" else 1
-            if can_switch:
-                new_type = row[2].selectbox(
-                    "",
-                    options=options,
-                    index=index,
-                    key=f"type_{col_name}"
-                )
-                st.session_state["column_selection"][col_name]["type"] = new_type
-            else:
-                # Dropdown anzeigen, aber disabled
-                row[2].selectbox(
-                    "",
-                    options=options,
-                    index=index,
-                    key=f"type_{col_name}",
-                    disabled=True
-                )
+            new_type = row[2].selectbox(
+                "",
+                options=st.session_state["column_selection"][col_name]["allowed_types"],
+                index=st.session_state["column_selection"][col_name]["allowed_types"].index(
+                    st.session_state["column_selection"][col_name]["selected_type"]
+                ),
+                key=f"type_{col_name}",
+            )
+            st.session_state["column_selection"][col_name]["selected_type"] = new_type
+
     else:
         st.error("Keine Spalten im Datensatz gefunden!")
 
     # Spalten für Clustering
-    columns = [col for col, sel in st.session_state["column_selection"].items() if sel["use"]]
-    column_types = {col: sel["type"] for col, sel in st.session_state["column_selection"].items() if sel["use"]}
+    columns = [
+        {"name": col, "type": st.session_state["column_selection"][col]["selected_type"]}
+        for col in st.session_state["column_selection"]
+        if st.session_state["column_selection"][col]["use"]
+    ]
 
     use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
 
@@ -233,29 +224,49 @@ if st.session_state["dataset_name"]:
             "SpectralClustering",
         ]
         selected_cluster_algorithms = st.multiselect(
-            "Clustering-Algorithmen auswählen", available_cluster_algorithms, default=available_cluster_algorithms
+            "Clustering-Algorithmen auswählen",
+            available_cluster_algorithms,
+            default=available_cluster_algorithms,
         )
 
         # Mehrfachauswahl für Dimensionality Reduction
-        available_dim_reduction = ["TSNE", "PCA", "IncrementalPCA", "KernelPCA", "FastICA", "TruncatedSVD"]
+        available_dim_reduction = [
+            "TSNE",
+            "PCA",
+            "IncrementalPCA",
+            "KernelPCA",
+            "FastICA",
+            "TruncatedSVD",
+        ]
         selected_dim_reduction = st.multiselect(
-            "Dimensionality Reduction auswählen", available_dim_reduction, default=available_dim_reduction
+            "Dimensionality Reduction auswählen",
+            available_dim_reduction,
+            default=available_dim_reduction,
         )
 
         # Mehrfachauswahl für Evaluator
-        available_evaluators = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
+        available_evaluators = [
+            "silhouetteScore",
+            "daviesBouldinScore",
+            "calinskiHarabaszScore",
+        ]
         selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
 
         n_evaluations = st.slider("Anzahl AutoML Evaluationen", min_value=10, max_value=200, value=50, step=10)
         cutoff_time = st.slider(
-            "Maximale Laufzeit pro Evaluation (Sekunden)", min_value=10, max_value=300, value=60, step=10
+            "Maximale Laufzeit pro Evaluation (Sekunden)",
+            min_value=10,
+            max_value=300,
+            value=60,
+            step=10,
         )
 
     else:
         # Dynamic algorithm selection
         clustering_algorithms = get_available_clustering_algorithms()
         clustering_algorithm = st.selectbox(
-            "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
+            "Clustering-Algorithmus auswählen",
+            options=sorted(clustering_algorithms.keys()),
         )
         clustering_params = clustering_algorithms.get(clustering_algorithm).get_default_params()
         chosen_clustering_params = {}
@@ -286,7 +297,9 @@ if st.session_state["dataset_name"]:
                         )
                     else:
                         chosen_preprocessing_params[k] = parse_params_value(st.text_input(label=k, value=str(v)))
-                chosen_preprocessing_params = PreProcessingParams(**chosen_preprocessing_params)
+                # chosen_preprocessing_params = PreProcessingParams(
+                #     **chosen_preprocessing_params
+                # )
 
     if st.button("Clustering starten"):
         dataset_name = st.session_state["dataset_name"]
@@ -307,6 +320,10 @@ if st.session_state["dataset_name"]:
             }
 
         else:
+            if preprocess:
+                filtered_preprocessing_params = {k: v for k, v in chosen_preprocessing_params.items() if v is not None}
+            else:
+                filtered_preprocessing_params = None
             # === Manueller Pfad ===
             data = {
                 "dataset_name": dataset_name,
@@ -314,7 +331,7 @@ if st.session_state["dataset_name"]:
                 "clustering_algorithm": clustering_algorithms.get(clustering_algorithm).backend_name,
                 "preprocess": preprocess,
                 "clustering_params": chosen_clustering_params,
-                "preprocessing_params": chosen_preprocessing_params.model_dump() if preprocess else None,
+                "preprocessing_params": (filtered_preprocessing_params),
             }
 
         try:
@@ -419,23 +436,37 @@ presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Grap
 
 if presentation == "Graph" and input_job_id:
     url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
-    available_result_columns = requests.get(url, params={"field": "columns"}).json()
-    selected_result_columns = st.multiselect(
-        "Welche Spalten sollen für den Graphen verwendet werden?",
-        options=available_result_columns,
-        default=available_result_columns[:2],
-        max_selections=2,
-    )
+    response = requests.get(url, params={"field": "columns"})
+
+    if response.status_code == 404:
+        st.error("Keine Ergebnisse für diese Job-ID gefunden.")
+        st.stop()
+    else:
+        available_result_columns = response.json()
+        available_result_columns = [col.get("name") for col in available_result_columns]
+        selected_result_columns = st.multiselect(
+            "Welche Spalten sollen für den Graphen verwendet werden?",
+            options=available_result_columns,
+            default=available_result_columns[:2],
+            max_selections=2,
+        )
 
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Graph": "graph"}
     pres = mapping[presentation]
     url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
+
+    if len(selected_result_columns) != 2 and pres == "graph":
+        st.error("Für den Graphen müssen genau zwei Spalten ausgewählt werden.")
+        st.stop()
     try:
         params = (
             None
             if pres == "table"
-            else {"x_column": selected_result_columns[0], "y_column": selected_result_columns[1]}
+            else {
+                "x_column": selected_result_columns[0],
+                "y_column": selected_result_columns[1],
+            }
         )
         resp = requests.get(url, params=params)
         if resp.status_code == 200:

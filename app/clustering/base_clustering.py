@@ -4,10 +4,12 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import pytz
 import requests
 from pydantic import ValidationError
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 from .preprocessing_params import PreProcessingParams
 from .preprocessing_pipeline import PreprocessingPipeline
@@ -28,10 +30,10 @@ DEFAULT_PREPROCESSING_PARAMS = {
     "use_pca": False,
     "pca_components": 10,
     "transform_type": None,
-    "imputation_strategy": "none",
-    "outlier_removal": "none",  # "none", "zscore", "iqr"
+    "imputation_strategy": None,
+    "outlier_removal": None,  # None, "zscore", "iqr"
     "outlier_threshold": 3.0,  # only for zscore
-    "feature_selection": "none",  # "none", "low_variance", "constant"
+    "feature_selection": None,  # None, "low_variance", "constant"
     "variance_threshold": 0.0,  # for low_variance
 }
 
@@ -43,7 +45,9 @@ class BaseClustering(ABC):
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         self.clustering_params = clustering_params
         self.dataset_name = dataset_name
-        self.columns = columns
+        # TODO: @Ersel: Hier wird jetzt ein dict statt einer Liste erwartet.
+        # Dieses dict kann für die Codierung der Spalten verwendet werden.
+        self.columns: dict[str, str] = columns
         self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
@@ -60,29 +64,38 @@ class BaseClustering(ABC):
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
             # Nur ausgewählte Spalten verwenden
-            return df[self.columns].to_numpy()
+            return df[[col.get("name") for col in self.columns]].to_numpy()
         except Exception as e:
             print(f"Error loading data: {str(e)}")
             raise
 
-    def validate_params(self):
-        """
-        Basic validation of input parameters.
-        This does not replace sklearn's internal validation,
-        but catches obvious issues early (e.g. wrong types, empty values).
-        """
-        for key, value in self.clustering_params.items():
-            # Disallow empty strings
-            if isinstance(value, str) and value.strip() == "":
-                raise ValueError(f"Parameter '{key}' cannot be an empty string.")
+    def validate_params_sklearn(self):
+        try:
+            cls = self.get_sklearn_estimator_class()
+            model = cls(**self.clustering_params)
+            dummy = np.array([[0.1, 1.2], [0.3, 0.7], [1.1, 0.4], [0.0, 0.9]])
+            model.fit(dummy)
+        except Exception as e:
+            raise ValueError(f"Invalid parameters: {e}")
 
-            # Disallow None (except for known valid exceptions)
-            if value is None and key not in ["preference", "init"]:
-                raise ValueError(f"Parameter '{key}' cannot be None.")
+    def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
+        nominal_cols = [col.get("name") for col in self.columns if col.get("type") == "nominal"]
 
-            # Disallow negative numbers for common numerical parameters
-            if isinstance(value, int | float) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
-                raise ValueError(f"Parameter '{key}' must be > 0.")
+        if ordinal_cols:
+            encoder = OrdinalEncoder()
+            df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
+
+        if nominal_cols:
+            ohe = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+            encoded = ohe.fit_transform(df[nominal_cols])
+            new_cols = ohe.get_feature_names_out(nominal_cols)
+            df_encoded = pd.DataFrame(encoded, columns=new_cols, index=df.index)
+
+            df.drop(columns=nominal_cols, inplace=True)
+            df = pd.concat([df, df_encoded], axis=1)
+
+        return df
 
     def prepare_data(self, data, preprocess=True):
         if not preprocess:
@@ -136,7 +149,10 @@ class BaseClustering(ABC):
             # Post the result to FastAPI backend
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
             print(f"Sending results to: {url}")  # Debug print
-            response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
+            response = requests.post(
+                f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/",
+                json=payload,
+            )
 
             if response.status_code != 200:
                 print(f"Error saving results: {response.text}")

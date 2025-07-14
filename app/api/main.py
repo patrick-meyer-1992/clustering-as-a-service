@@ -1,17 +1,17 @@
-
 import io
 import os
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
 import pandas as pd
 import plotly.express as px
 import pytz
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
-from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
 from workers.tasks import run_clustering_job
@@ -25,6 +25,7 @@ ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
+
 
 async def get_mongodb():
     MONGODB_DB = os.getenv("MONGODB_DB")
@@ -46,6 +47,7 @@ async def get_mongodb():
     finally:
         await mongodb_client.close()
 
+
 def validate_data(data):
     # Check for None
     if data is None:
@@ -66,89 +68,50 @@ def validate_data(data):
     # Check if numeric
     # if not np.issubdtype(data.dtype, np.number):
     #    raise TypeError("Input data must be numeric.")
-class ColumnTypeInfo(BaseModel):
-    column: str
-    detected_type: str  # "numerisch" oder "kategorial"
-    can_switch: bool    # True, wenn beide Typen sinnvoll sind
-
-class ColumnsTypeResponse(BaseModel):
-    columns: list[ColumnTypeInfo]
-
-def detect_column_type(series: pd.Series) -> tuple[str, bool]:
-    """
-    Gibt (Typ, can_switch) zurück.
-    Typ: "numerisch" oder "kategorial"
-    can_switch: True, wenn sowohl Zahlen als auch Strings vorkommen und beides sinnvoll wäre.
-    """
-    # Pandas-Typ-Erkennung
-    import pandas.api.types as ptypes
-    if ptypes.is_numeric_dtype(series):
-        detected_type = "numerisch"
-        can_switch = False
-    else:
-        detected_type = "kategorial"
-        can_switch = False
-    # Optionale Umschaltbarkeit: Wenn dtype "object" und >50% numerisch, Umschaltmöglichkeit anbieten
-    if ptypes.is_object_dtype(series):
-        num_count = pd.to_numeric(series, errors="coerce").notnull().sum()
-        total = len(series)
-        if num_count / total > 0.5:
-            can_switch = True
-    return detected_type, can_switch
 
 
-@app.get("/dataset/{dataset_name}/columns_type", response_model=ColumnsTypeResponse)
-async def get_columns_type(dataset_name: str, mongodb_database=Depends(get_mongodb)):
-    """
-    Gibt für jeden Spaltennamen den automatisch erkannten Typ und ob ein Wechsel möglich ist zurück.
-    """
-    import logging
-    logger = logging.getLogger("uvicorn.error")
-    logger.info(f"[columns_type] Anfrage für dataset_name: '{dataset_name}'")
-    # Debug: Zeige Typ und Inhalt der Datenbank-Dependency
-    logger.info(f"[columns_type] Typ von mongodb_database: {type(mongodb_database)}")
-    logger.info(f"[columns_type] Datenbankname: {getattr(mongodb_database, 'name', None)}")
-    if not dataset_name:
-        logger.warning("[columns_type] Kein Datensatzname übergeben!")
-        raise HTTPException(status_code=400, detail="Kein Datensatzname übergeben!")
+class DatasetField(str, Enum):
+    dataset_name = "dataset_name"
+    content_type = "content_type"
+    columns = "columns"
+    size = "size"
+
+
+@app.get(
+    "/metadata/{dataset_name}",
+    response_model=dict[str, str | list[dict[str, str | list[str]]]],
+)
+async def get_metadata(
+    dataset_name: str,
+    fields: list[DatasetField] = Query(
+        [DatasetField.columns],
+        description="Fields to return from the dataset metadata. Default is 'columns'.",
+    ),
+    mongodb_database=Depends(get_mongodb),
+):
     try:
         data_collection = mongodb_database.get_collection("data")
-        # Debug: Zeige alle Datensatznamen in der Collection
-        all_datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=100)
-        logger.info(f"[columns_type] Alle Datensatznamen in Collection: {[d['dataset_name'] for d in all_datasets]}")
-        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
-        logger.info(f"[columns_type] Ergebnis von find_one: {dataset}")
-        if not dataset:
-            logger.warning(f"[columns_type] Kein Datensatz gefunden für: '{dataset_name}'")
+        # Check if the dataset exists
+        exists = await data_collection.find_one({"dataset_name": dataset_name})
+        if not exists:
             raise HTTPException(status_code=404, detail="Dataset not found")
-        logger.info(f"[columns_type] Datensatz gefunden für: '{dataset_name}'")
-        try:
-            df = pd.read_csv(io.StringIO(dataset["data"]))
-        except Exception as e:
-            logger.error(f"[columns_type] Fehler beim Parsen der CSV: {e}")
-            raise HTTPException(status_code=400, detail=f"Fehler beim Parsen der CSV: {e}")
-        result = []
-        for col in df.columns:
-            detected_type, can_switch = detect_column_type(df[col])
-            result.append(ColumnTypeInfo(column=col, detected_type=detected_type, can_switch=can_switch))
-        logger.info(f"[columns_type] Spalten erkannt: {[r.column for r in result]}")
-        return ColumnsTypeResponse(columns=result)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"[columns_type] Unerwarteter Fehler: {e}")
-        raise HTTPException(status_code=500, detail=f"Fehler bei Spaltentyp-Erkennung: {e}")
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from pymongo import AsyncMongoClient
-from workers.celery_conn import celery
-from workers.tasks import run_clustering_job
 
-# Die folgenden Zeilen wurden entfernt, da sie doppelt waren und die Dependency Injection gestört haben.
+        # Fetch the specified fields from the dataset
+        fields_to_return = {field.value: 1 for field in fields}
+        fields_to_return["_id"] = 0  # Exclude the _id field
+        response = await data_collection.find_one({"dataset_name": dataset_name}, fields_to_return)
+
+        return response
+    except Exception as e:
+        print(f"Error retrieving dataset: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
-async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
+async def get_dataset(
+    dataset_name: str,
+    mongodb_database=Depends(get_mongodb),
+):
     try:
         # Hole den Datensatz aus MongoDB
         data_collection = mongodb_database.get_collection("data")
@@ -171,9 +134,36 @@ async def get_dataset(dataset_name: str, mongodb_database=Depends(get_mongodb)):
 
 class DatasetPutResponse(BaseModel):
     dataset_name: str = Field(description="The name of the dataset", default=...)
-    columns: list[str] = Field(description="The columns used in the dataset", default=...)
+    columns: list[dict[str, str | list[str]]] = Field(
+        description="The columns used in the dataset and their allowed types",
+        default=...,
+    )
     model_config = {
-        "json_schema_extra": {"examples": [{"dataset_name": "iris.csv", "columns": ["sepal.length", "sepal.width"]}]}
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "dataset_name": "iris.csv",
+                    "columns": [
+                        {
+                            "name": "sepal.length",
+                            "allowed_types": ["numeric", "nominal", "ordinal"],
+                        },
+                        {
+                            "name": "sepal.width",
+                            "allowed_types": ["numeric", "nominal", "ordinal"],
+                        },
+                        {
+                            "name": "petal.length",
+                            "allowed_types": ["numeric", "nominal", "ordinal"],
+                        },
+                        {
+                            "name": "petal.width",
+                            "allowed_types": ["numeric", "nominal", "ordinal"],
+                        },
+                    ],
+                }
+            ]
+        }
     }
 
 
@@ -182,6 +172,18 @@ async def put_dataset(
     file: UploadFile = File(description="The CSV file to upload", default=...),
     mongodb_database=Depends(get_mongodb),
 ):
+    type_mapping = {
+        "float64": ["numeric", "nominal", "ordinal"],
+        "float32": ["numeric", "nominal", "ordinal"],
+        "int64": ["numeric", "nominal", "ordinal"],
+        "int32": ["numeric", "nominal", "ordinal"],
+        "bool": ["ordinal", "nominal"],
+        "object": ["nominal", "ordinal"],
+        "category": ["nominal", "ordinal"],
+        "datetime64[ns]": None,
+        "timedelta[ns]": None,
+    }
+
     data_collection = mongodb_database.get_collection("data")
     # Check if file with the same name already exists
     exists = await data_collection.find_one({"dataset_name": file.filename})
@@ -193,16 +195,16 @@ async def put_dataset(
         # Parse the CSV file to extract column names
         try:
             df = pd.read_csv(io.BytesIO(content))
-            columns = df.columns.tolist()
+            columns = [
+                {"name": col, "allowed_types": type_mapping.get(str(dtype))}
+                for col, dtype in df.dtypes.items()
+                if type_mapping[str(dtype)] is not None
+            ]
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Convert to Numpy array and validate
-        data_array = df.to_numpy()
-        validate_data(data_array)
-
-        # Debugging: Logge die zu speichernden Daten
-        print(f"Saving dataset: {file.filename}, columns: {columns}")
+        validate_data(df.to_numpy())
 
         # Store the dataset and metadata in MongoDB
         await data_collection.insert_one(
@@ -214,9 +216,6 @@ async def put_dataset(
                 "data": content.decode("utf-8"),  # Store the CSV content as a string
             }
         )
-        # Debug: Zeige alle Datensatznamen nach dem Einfügen
-        all_datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=100)
-        print(f"[put_dataset] Alle Datensatznamen nach Insert: {[d['dataset_name'] for d in all_datasets]}")
         return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
@@ -230,7 +229,10 @@ class DatasetDeleteResponse(BaseModel):
             "examples": [
                 {
                     "dataset_name": "iris.csv",
-                    "job_ids": ["fb231936-1d83-43de-85a4-81c6889dd21c", "777b6e2e-07b6-47a8-82e1-f08900ea0176"],
+                    "job_ids": [
+                        "fb231936-1d83-43de-85a4-81c6889dd21c",
+                        "777b6e2e-07b6-47a8-82e1-f08900ea0176",
+                    ],
                 }
             ]
         }
@@ -264,7 +266,9 @@ class DatasetGetResponse(BaseModel):
 
 
 @app.get("/datasets/")
-async def get_datasets(mongodb_database=Depends(get_mongodb)) -> list[DatasetGetResponse]:
+async def get_datasets(
+    mongodb_database=Depends(get_mongodb),
+) -> list[DatasetGetResponse]:
     """
     Returns a list of all uploaded datasets.
     """
@@ -275,7 +279,7 @@ async def get_datasets(mongodb_database=Depends(get_mongodb)) -> list[DatasetGet
 
 class JobPostRequest(BaseModel):
     dataset_name: str = Field(description="The name of the dataset", default=...)
-    columns: list[str] | None = Field(description="The columns to use for clustering", default=None)
+    columns: list[dict[str, str]] | None = Field(description="The columns to use for clustering", default=None)
     clustering_algorithm: str = Field(description="The clustering algorithm to use", default=..., examples=algorithms)
     preprocess: bool = Field(description="Whether to preprocess the data", default=True)
     clustering_params: dict[str, Any] | None = Field(description="Clustering algorithm parameters", default=None)
@@ -285,7 +289,16 @@ class JobPostRequest(BaseModel):
             "examples": [
                 {
                     "dataset_name": "iris.csv",
-                    "columns": ["sepal.length", "sepal.width"],
+                    "columns": [
+                        {
+                            "name": "sepal.length",
+                            "type": "numeric",
+                        },
+                        {
+                            "name": "sepal.width",
+                            "type": "numeric",
+                        },
+                    ],
                     "clustering_algorithm": "kmeans",
                     "preprocess": "true",
                     "clustering_params": {"n_clusters": 3},
@@ -295,11 +308,11 @@ class JobPostRequest(BaseModel):
                         "normalization_type": "l2",
                         "use_pca": False,
                         "pca_components": 10,
-                        "transform_type": None,
-                        "imputation_strategy": "none",
-                        "outlier_removal": "none",
+                        "transform_type": "quantile",
+                        "imputation_strategy": "mean",
+                        "outlier_removal": "zscore",
                         "outlier_threshold": 3.0,
-                        "feature_selection": "none",
+                        "feature_selection": "low_variance",
                         "variance_threshold": 0.0,
                     },
                 }
@@ -331,8 +344,35 @@ def parse_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/job/")
-async def post_job(req: JobPostRequest) -> JobPostResponse:
+async def post_job(
+    req: JobPostRequest,
+    mongodb_database=Depends(get_mongodb),
+) -> JobPostResponse:
     clustering_params = parse_params(req.clustering_params)
+
+    data_collection = mongodb_database.get_collection("data")
+    # Check if the dataset exists
+    exists = await data_collection.find_one({"dataset_name": req.dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Fetch the specified fields from the dataset
+    dataset = await data_collection.find_one({"dataset_name": req.dataset_name}, {"_id": 0, "columns": 1})
+
+    # Check if requested columns exist for the dataset and their types are valid
+    for request_column in req.columns:
+        if request_column["name"] not in [col["name"] for col in dataset["columns"]]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' not found in dataset '{req.dataset_name}'",
+            )
+        allowed_types = [col["allowed_types"] for col in dataset["columns"] if col["name"] == request_column["name"]][0]
+
+        if request_column["type"] not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' does not support type '{request_column['type']}'.",
+            )
 
     try:
         job = run_clustering_job.delay(
@@ -341,7 +381,7 @@ async def post_job(req: JobPostRequest) -> JobPostResponse:
             datetime.now(TIMEZONE).isoformat(),
             req.clustering_algorithm,
             req.preprocess,
-            preprocessing_params=req.preprocessing_params.model_dump() if req.preprocess else None,
+            preprocessing_params=(req.preprocessing_params.model_dump() if req.preprocess else None),
             **(clustering_params),
         )
 
@@ -443,7 +483,8 @@ class ResultField(str, Enum):
 async def get_result_raw(
     job_id: str,
     field: ResultField | None = Query(
-        "labels", title="The field to return from the result. If not set, only the labels are returned."
+        "labels",
+        title="The field to return from the result. If not set, only the labels are returned.",
     ),
     mongodb_database=Depends(get_mongodb),
 ) -> Any:
@@ -460,8 +501,14 @@ async def get_result_raw(
 @app.get("/result/{job_id}/graph")
 async def get_result_graph(
     job_id: str,
-    x_column: str | None = Query(None, title="The column to use for the x-axis. Set only in combination with y_column"),
-    y_column: str | None = Query(None, title="The column to use for the y-axis. Set only in combination with x_column"),
+    x_column: str | None = Query(
+        None,
+        title="The column to use for the x-axis. Set only in combination with y_column",
+    ),
+    y_column: str | None = Query(
+        None,
+        title="The column to use for the y-axis. Set only in combination with x_column",
+    ),
     mongodb_database=Depends(get_mongodb),
 ) -> dict[str, Any]:
     """
@@ -511,7 +558,10 @@ async def get_result_graph(
 class ResultPostRequest(BaseModel):
     job_id: str = Field(description="The ID of the job", default=...)
     dataset_name: str = Field(description="The name of the dataset", default=...)
-    columns: list[str] = Field(description="The columns used in the dataset", default=...)
+    columns: list[dict[str, str]] = Field(
+        description="The columns used in the dataset and their used encoding",
+        default=...,
+    )
     created_timestamp: str = Field(description="The creation timestamp", default=...)
     started_timestamp: str = Field(description="The start timestamp", default=...)
     finished_timestamp: str = Field(description="The finish timestamp", default=...)
@@ -528,7 +578,16 @@ class ResultPostRequest(BaseModel):
                 {
                     "job_id": "fb231936-1d83-43de-85a4-81c6889dd21c",
                     "dataset_name": "iris.csv",
-                    "columns": ["sepal.length", "sepal.width"],
+                    "columns": [
+                        {
+                            "name": "sepal.length",
+                            "type": "numeric",
+                        },
+                        {
+                            "name": "sepal.width",
+                            "type": "numeric",
+                        },
+                    ],
                     "created_timestamp": "2025-07-02T11:53:56.083632+00:00",
                     "started_timestamp": "2025-07-02T11:54:56.083632+00:00",
                     "finished_timestamp": "2025-07-02T11:55:56.083632+00:00",
@@ -572,13 +631,16 @@ class AutoMlClusterRequest(BaseModel):
     dataset_name: str = Field(..., description="The name of the dataset")
     columns: list[str] = Field(..., description="The columns to use for clustering")
     clustering_algorithms: list[str] | None = Field(
-        default=None, description="List of clustering algorithms to use (e.g., KMeans, DBSCAN)"
+        default=None,
+        description="List of clustering algorithms to use (e.g., KMeans, DBSCAN)",
     )
     dim_reduction_algorithms: list[str] | None = Field(
-        default=None, description="List of dimensionality reduction algorithms (e.g., PCA, TSNE)"
+        default=None,
+        description="List of dimensionality reduction algorithms (e.g., PCA, TSNE)",
     )
     evaluator_ls: list[str] | None = Field(
-        default=None, description="List of clustering evaluation metrics (e.g., silhouetteScore)"
+        default=None,
+        description="List of clustering evaluation metrics (e.g., silhouetteScore)",
     )
     n_evaluations: int | None = Field(default=50, description="Number of AutoML evaluations to run")
     cutoff_time: int | None = Field(default=60, description="Time limit in seconds for each AutoML evaluation")
@@ -664,7 +726,9 @@ async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
 @app.get("/parameters/{algorithm_name}")
 async def get_default_algorithm_parameters(
     algorithm_name: str = Path(
-        description="The clustering algorithm to check for default parameters", default=..., examples=algorithms
+        description="The clustering algorithm to check for default parameters",
+        default=...,
+        examples=algorithms,
     ),
 ) -> dict[str, Any]:
     """

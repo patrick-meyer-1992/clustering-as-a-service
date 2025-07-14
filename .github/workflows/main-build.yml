@@ -40,6 +40,14 @@ jobs:
         push: true
         tags: patrickmeyer/caas-clustering-worker:${{ env.SHORT_SHA }}
 
+    - name: Build and push Docker image for automl-worker
+      uses: docker/build-push-action@v5
+      with:
+        context: ./app
+        file: ./app/automl.Dockerfile
+        push: true
+        tags: patrickmeyer/caas-automl-worker:${{ env.SHORT_SHA }}
+
     - name: Build and push Docker image for streamlit
       uses: docker/build-push-action@v5
       with:
@@ -64,7 +72,7 @@ jobs:
         cd production/app
         
         # Update image tags in all services
-        for service in api clustering-worker streamlit; do
+        for service in api clustering-worker automl-worker streamlit; do
           cd $service
           kustomize edit set image patrickmeyer/caas-$service=patrickmeyer/caas-$service:${{ env.SHORT_SHA }}
           cd ..
