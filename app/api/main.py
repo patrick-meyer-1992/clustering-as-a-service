@@ -364,7 +364,6 @@ async def post_job(
     # Check if requested columns exist for the dataset and their types are valid
     for request_column in req.columns:
         if request_column["name"] not in [col["name"] for col in dataset["columns"]]:
-            print(request_column["name"])
             raise HTTPException(
                 status_code=400,
                 detail=f"Column '{request_column['name']}' not found in dataset '{req.dataset_name}'",
