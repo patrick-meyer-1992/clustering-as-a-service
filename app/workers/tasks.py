@@ -43,7 +43,7 @@ def run_clustering_job(
         data = clustering.load_data()
 
         # Encoding nominal or ordinal columns
-        df = pd.DataFrame(data, columns=clustering.columns.keys())
+        df = pd.DataFrame(data)
         df = clustering.encode_data(df)
         data = df.to_numpy()
 

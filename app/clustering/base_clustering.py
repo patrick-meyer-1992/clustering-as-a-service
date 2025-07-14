@@ -79,8 +79,8 @@ class BaseClustering(ABC):
             raise ValueError(f"Invalid parameters: {e}")
 
     def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        ordinal_cols = [col for col, typ in self.columns.items() if typ == "ordinal"]
-        nominal_cols = [col for col, typ in self.columns.items() if typ == "nominal"]
+        ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
+        nominal_cols = [col.get("name") for col in self.columns if col.get("type") == "nominal"]
 
         if ordinal_cols:
             encoder = OrdinalEncoder()
