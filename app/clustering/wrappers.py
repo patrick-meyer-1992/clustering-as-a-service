@@ -1,6 +1,5 @@
 import collections
 
-import numpy as np
 from sklearn.cluster import (
     DBSCAN,
     OPTICS,
@@ -22,12 +21,16 @@ class AffinityPropagationWrapper(BaseClustering):
     backend_name = "affinitypropagation"
     frontend_name = "Affinity Propagation"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return AffinityPropagation().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return AffinityPropagation
 
     def run(self, data):
         try:
@@ -57,12 +60,16 @@ class AgglomerativeClusteringWrapper(BaseClustering):
     backend_name = "agglomerative"
     frontend_name = "Agglomerative"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return AgglomerativeClustering().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return AgglomerativeClustering
 
     def run(self, data):
         try:
@@ -91,12 +98,16 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
     backend_name = "bayesiangaussianmixture"
     frontend_name = "Bayesian Gaussian Mixture"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return BayesianGaussianMixture().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return BayesianGaussianMixture
 
     def run(self, data):
         try:
@@ -128,13 +139,17 @@ class BIRCHWrapper(BaseClustering):
     backend_name = "birch"
     frontend_name = "BIRCH"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
         self.clustering_params.update(clustering_params)
 
     @staticmethod
     def get_default_params():
         return Birch().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return Birch
 
     def run(self, data):
         try:
@@ -164,12 +179,16 @@ class BisectingKMeansWrapper(BaseClustering):
     backend_name = "bisectingkmeans"
     frontend_name = "Bisecting KMeans"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return BisectingKMeans().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return BisectingKMeans
 
     def run(self, data):
         try:
@@ -198,12 +217,16 @@ class DBSCANWrapper(BaseClustering):
     backend_name = "dbscan"
     frontend_name = "DBSCAN"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return DBSCAN().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return DBSCAN
 
     def run(self, data):
         try:
@@ -227,12 +250,16 @@ class GaussianMixtureWrapper(BaseClustering):
     backend_name = "gaussianmixture"
     frontend_name = "Gaussian Mixture"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return GaussianMixture().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return GaussianMixture
 
     def run(self, data):
         try:
@@ -263,12 +290,16 @@ class KMeansWrapper(BaseClustering):
     backend_name = "kmeans"
     frontend_name = "KMeans"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return KMeans().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return KMeans
 
     def run(self, data):
         try:
@@ -297,12 +328,16 @@ class MeanShiftWrapper(BaseClustering):
     backend_name = "meanshift"
     frontend_name = "Mean Shift"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return MeanShift().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return MeanShift
 
     def run(self, data):
         try:
@@ -330,12 +365,16 @@ class MiniBatchKMeansWrapper(BaseClustering):
     backend_name = "minibatchkmeans"
     frontend_name = "Mini Batch KMeans"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return MiniBatchKMeans().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return MiniBatchKMeans
 
     def run(self, data):
         try:
@@ -364,12 +403,16 @@ class OPTICSWrapper(BaseClustering):
     backend_name = "optics"
     frontend_name = "OPTICS"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return OPTICS().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return OPTICS
 
     def run(self, data):
         try:
@@ -400,12 +443,16 @@ class SpectralClusteringWrapper(BaseClustering):
     backend_name = "spectralclustering"
     frontend_name = "Spectral Clustering"
 
-    def __init__(self, dataset_name, columns, preprocessing_params = None, **clustering_params):
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
 
     @staticmethod
     def get_default_params():
         return SpectralClustering().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return SpectralClustering
 
     def run(self, data):
         try:

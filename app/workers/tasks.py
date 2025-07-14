@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pandas as pd
 import pytz
 from clustering import wrappers
 
@@ -8,9 +9,7 @@ from .celery_conn import celery
 TIMEZONE = pytz.timezone("UTC")
 
 ALGORITHM_MAP = {
-    getattr(wrappers, algo).backend_name: getattr(wrappers, algo)
-    for algo in dir(wrappers)
-    if algo.endswith("Wrapper")
+    getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
 }
 
 
@@ -38,7 +37,16 @@ def run_clustering_job(
         clustering_class = ALGORITHM_MAP[algorithm_name]
         clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
+        # Clustering parameters validation
+        clustering.validate_params_sklearn()
+
         data = clustering.load_data()
+
+        # Encoding nominal or ordinal columns
+        df = pd.DataFrame(data)
+        df = clustering.encode_data(df)
+        data = df.to_numpy()
+
         data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
 

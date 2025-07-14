@@ -404,14 +404,20 @@ presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Grap
 
 if presentation == "Graph" and input_job_id:
     url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
-    available_result_columns = requests.get(url, params={"field": "columns"}).json()
-    available_result_columns = [col.get("name") for col in available_result_columns]
-    selected_result_columns = st.multiselect(
-        "Welche Spalten sollen für den Graphen verwendet werden?",
-        options=available_result_columns,
-        default=available_result_columns[:2],
-        max_selections=2,
-    )
+    response = requests.get(url, params={"field": "columns"})
+
+    if response.status_code == 404:
+        st.error("Keine Ergebnisse für diese Job-ID gefunden.")
+        st.stop()
+    else:
+        available_result_columns = response.json()
+        available_result_columns = [col.get("name") for col in available_result_columns]
+        selected_result_columns = st.multiselect(
+            "Welche Spalten sollen für den Graphen verwendet werden?",
+            options=available_result_columns,
+            default=available_result_columns[:2],
+            max_selections=2,
+        )
 
 if st.button("Ergebnis anzeigen") and input_job_id:
     mapping = {"Tabelle": "table", "Graph": "graph"}
