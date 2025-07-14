@@ -4,10 +4,12 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import pytz
 import requests
 from pydantic import ValidationError
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 from .preprocessing_params import PreProcessingParams
 from .preprocessing_pipeline import PreprocessingPipeline
@@ -67,24 +69,33 @@ class BaseClustering(ABC):
             print(f"Error loading data: {str(e)}")
             raise
 
-    def validate_params(self):
-        """
-        Basic validation of input parameters.
-        This does not replace sklearn's internal validation,
-        but catches obvious issues early (e.g. wrong types, empty values).
-        """
-        for key, value in self.clustering_params.items():
-            # Disallow empty strings
-            if isinstance(value, str) and value.strip() == "":
-                raise ValueError(f"Parameter '{key}' cannot be an empty string.")
+    def validate_params_sklearn(self):
+        try:
+            cls = self.get_sklearn_estimator_class()
+            model = cls(**self.clustering_params)
+            dummy = np.array([[0.1, 1.2], [0.3, 0.7], [1.1, 0.4], [0.0, 0.9]])
+            model.fit(dummy)
+        except Exception as e:
+            raise ValueError(f"Invalid parameters: {e}")
 
-            # Disallow None (except for known valid exceptions)
-            if value is None and key not in ["preference", "init"]:
-                raise ValueError(f"Parameter '{key}' cannot be None.")
+    def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        ordinal_cols = [col for col, typ in self.columns.items() if typ == "ordinal"]
+        nominal_cols = [col for col, typ in self.columns.items() if typ == "nominal"]
 
-            # Disallow negative numbers for common numerical parameters
-            if isinstance(value, int | float) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
-                raise ValueError(f"Parameter '{key}' must be > 0.")
+        if ordinal_cols:
+            encoder = OrdinalEncoder()
+            df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
+
+        if nominal_cols:
+            ohe = OneHotEncoder(sparse=False, handle_unknown="ignore")
+            encoded = ohe.fit_transform(df[nominal_cols])
+            new_cols = ohe.get_feature_names_out(nominal_cols)
+            df_encoded = pd.DataFrame(encoded, columns=new_cols, index=df.index)
+
+            df.drop(columns=nominal_cols, inplace=True)
+            df = pd.concat([df, df_encoded], axis=1)
+
+        return df
 
     def prepare_data(self, data, preprocess=True):
         if not preprocess:
