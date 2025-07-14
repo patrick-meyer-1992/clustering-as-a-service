@@ -27,6 +27,27 @@ ALGORITHM_MAP = {
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
 
 
+async def get_mongodb():
+    MONGODB_DB = os.getenv("MONGODB_DB")
+    MONGODB_HOST = os.getenv("MONGODB_HOST")
+    MONGODB_PORT = os.getenv("MONGODB_PORT")
+
+    # For testing purposes, you can set MONGODB_URL in your environment variables
+    MONGODB_URL = os.getenv("MONGODB_URL", None)
+
+    if MONGODB_URL:
+        mongodb_client = AsyncMongoClient(MONGODB_URL)
+        print(f"Using MongoDB URL: {MONGODB_URL}")
+    else:
+        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
+
+    mongodb_database = mongodb_client.get_database(MONGODB_DB)
+    try:
+        yield mongodb_database
+    finally:
+        await mongodb_client.close()
+
+
 def validate_data(data):
     # Check for None
     if data is None:
@@ -47,27 +68,6 @@ def validate_data(data):
     # Check if numeric
     # if not np.issubdtype(data.dtype, np.number):
     #    raise TypeError("Input data must be numeric.")
-
-
-async def get_mongodb():
-    MONGODB_DB = os.getenv("MONGODB_DB")
-    MONGODB_HOST = os.getenv("MONGODB_HOST")
-    MONGODB_PORT = os.getenv("MONGODB_PORT")
-
-    # For testing purposes, you can set MONGODB_URL in your environment variables
-    MONGODB_URL = os.getenv("MONGODB_URL", None)
-
-    if MONGODB_URL:
-        mongodb_client = AsyncMongoClient(MONGODB_URL)
-        print(f"Using MongoDB URL: {MONGODB_URL}")
-    else:
-        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
-
-    mongodb_database = mongodb_client.get_database(MONGODB_DB)
-    try:
-        yield mongodb_database
-    finally:
-        await mongodb_client.close()
 
 
 class DatasetField(str, Enum):
@@ -204,8 +204,7 @@ async def put_dataset(
             raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
 
         # Convert to Numpy array and validate
-        data_array = df.to_numpy()
-        validate_data(data_array)
+        validate_data(df.to_numpy())
 
         # Store the dataset and metadata in MongoDB
         await data_collection.insert_one(
@@ -217,7 +216,6 @@ async def put_dataset(
                 "data": content.decode("utf-8"),  # Store the CSV content as a string
             }
         )
-
         return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e

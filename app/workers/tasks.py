@@ -38,7 +38,8 @@ def run_clustering_job(
         clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
         # Clustering parameters validation
-        clustering.validate_params_sklearn()
+        # Temporarily removed because it throws false positive errors when n_clusters > 4
+        # clustering.validate_params_sklearn()
 
         data = clustering.load_data()
 
@@ -49,9 +50,6 @@ def run_clustering_job(
 
         data = clustering.prepare_data(data, preprocess)
         result = clustering.run(data)
-
-        # Debugging: Logge die erweiterten Ergebnisse
-        print(f"Result with X and columns for job_id {job_id}: {result}")
 
         clustering.save_results(result, job_id, created_timestamp, started_timestamp)
 

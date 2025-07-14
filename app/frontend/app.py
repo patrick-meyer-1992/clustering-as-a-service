@@ -135,40 +135,77 @@ else:
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
 
-    # Load columns from selected dataset
+    # Lade Spalten und Typen aus Backend
+    available_columns = []
     try:
-        # if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
-        #     available_columns = df.columns.tolist()
-        # else:
-        # Load dataset from backend if not currently uploaded
         resp = requests.get(f"{FASTAPI_URL}/metadata/{st.session_state['dataset_name']}")
         available_columns = resp.json().get("columns") if resp.status_code == 200 else []
 
-        # Column selection interface
-        if available_columns:
-            use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
-            col_names = [col.get("name") for col in available_columns]
-            col_allowed_types = [col.get("allowed_types") for col in available_columns]
-
-            # TODO: @Steffen: Hier überarbeitete Spaltenauswahl einfügen
-            if use_all_columns:
-                columns = available_columns
-                st.info(f"Verwende alle Spalten: {', '.join(col_names)}")
-            else:
-                columns = st.multiselect(
-                    "Spalten für Clustering auswählen",
-                    options=col_names,
-                    default=col_names,
-                )
-                if not columns:
-                    st.warning("Bitte mindestens eine Spalte auswählen!")
-        else:
-            st.error("Keine Spalten im Datensatz gefunden!")
-            columns = []
-
     except Exception as e:
-        st.error(f"Fehler beim Laden der Spalten: {e}")
-        columns = []
+        st.error(f"Fehler beim Laden der Spalteninformationen: {e}")
+        available_columns = []
+
+    if available_columns:
+        st.markdown("**Spaltenauswahl**")
+
+        if "column_selection" not in st.session_state or st.session_state["dataset_name"] != st.session_state.get(
+            "last_column_selection_dataset", ""
+        ):
+            st.session_state["column_selection"] = {
+                column["name"]: {
+                    "use": True,
+                    "selected_type": column["allowed_types"][0],
+                    "allowed_types": column["allowed_types"],
+                }
+                for column in available_columns
+            }
+            st.session_state["last_column_selection_dataset"] = st.session_state["dataset_name"]
+
+        all_selected = all(
+            st.session_state["column_selection"][col]["use"] for col in st.session_state["column_selection"]
+        )
+        select_all = st.checkbox("Alle Spalten auswählen", value=all_selected, key="select_all_columns")
+
+        # Synchronisiere Einzel-Checkboxen, wenn "Alle auswählen" geändert wurde
+        if select_all != all_selected:
+            for col in st.session_state["column_selection"]:
+                st.session_state["column_selection"][col]["use"] = select_all
+
+        # Tabellen-Header
+        header = st.columns([1, 3, 2])
+        header[0].markdown("**Verwenden**")
+        header[1].markdown("**Spaltenname**")
+        header[2].markdown("**Typ**")
+
+        # Jede Spalte als eigene Zeile, immer sauber ausgerichtet
+        for col in available_columns:
+            col_name = col["name"]
+            use = st.session_state["column_selection"][col_name]["use"]
+            row = st.columns([1, 3, 2])
+            # Checkbox für verwenden
+            new_use = row[0].checkbox("", value=use, key=f"use_{col_name}")
+            st.session_state["column_selection"][col_name]["use"] = new_use
+            # Spaltenname
+            row[1].markdown(f"{col_name}")
+            new_type = row[2].selectbox(
+                "",
+                options=st.session_state["column_selection"][col_name]["allowed_types"],
+                index=st.session_state["column_selection"][col_name]["allowed_types"].index(
+                    st.session_state["column_selection"][col_name]["selected_type"]
+                ),
+                key=f"type_{col_name}",
+            )
+            st.session_state["column_selection"][col_name]["selected_type"] = new_type
+
+    else:
+        st.error("Keine Spalten im Datensatz gefunden!")
+
+    # Spalten für Clustering
+    columns = [
+        {"name": col, "type": st.session_state["column_selection"][col]["selected_type"]}
+        for col in st.session_state["column_selection"]
+        if st.session_state["column_selection"][col]["use"]
+    ]
 
     use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
 
@@ -274,7 +311,7 @@ if st.session_state["dataset_name"]:
             dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
             data = {
                 "dataset_name": dataset_name,
-                "columns": col_names,
+                "columns": columns,
                 "clustering_algorithms": selected_cluster_algorithms,
                 "dim_reduction_algorithms": selected_dim_reduction or None,
                 "evaluator_ls": selected_evaluators,
@@ -288,14 +325,9 @@ if st.session_state["dataset_name"]:
             else:
                 filtered_preprocessing_params = None
             # === Manueller Pfad ===
-            # TODO: @Steffen: default_col_objects erstmal nur Platzhalter.
-            # Später ersetzen durch vom Nutzer ausgewählte Spalten (inkl. Typen)
-            default_col_objects = [
-                {"name": col.get("name"), "type": col.get("allowed_types")[0]} for col in available_columns
-            ]
             data = {
                 "dataset_name": dataset_name,
-                "columns": default_col_objects,
+                "columns": columns,
                 "clustering_algorithm": clustering_algorithms.get(clustering_algorithm).backend_name,
                 "preprocess": preprocess,
                 "clustering_params": chosen_clustering_params,

@@ -87,7 +87,7 @@ class BaseClustering(ABC):
             df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
 
         if nominal_cols:
-            ohe = OneHotEncoder(sparse=False, handle_unknown="ignore")
+            ohe = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
             encoded = ohe.fit_transform(df[nominal_cols])
             new_cols = ohe.get_feature_names_out(nominal_cols)
             df_encoded = pd.DataFrame(encoded, columns=new_cols, index=df.index)
