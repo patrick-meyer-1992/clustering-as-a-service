@@ -1,4 +1,5 @@
 import io
+import math
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -7,17 +8,11 @@ import numpy as np
 import pandas as pd
 import pytz
 import requests
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import (
-    MaxAbsScaler,
-    MinMaxScaler,
-    Normalizer,
-    PowerTransformer,
-    QuantileTransformer,
-    RobustScaler,
-    StandardScaler,
-)
+from pydantic import ValidationError
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+
+from .preprocessing_params import PreProcessingParams
+from .preprocessing_pipeline import PreprocessingPipeline
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
@@ -27,6 +22,7 @@ FASTAPI_HOST = os.getenv("FASTAPI_HOST")
 FASTAPI_PORT = os.getenv("FASTAPI_PORT")
 FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
 
+
 DEFAULT_PREPROCESSING_PARAMS = {
     "scaler": "auto",
     "use_normalization": False,
@@ -34,10 +30,10 @@ DEFAULT_PREPROCESSING_PARAMS = {
     "use_pca": False,
     "pca_components": 10,
     "transform_type": None,
-    "imputation_strategy": "none",
-    "outlier_removal": "none",  # "none", "zscore", "iqr"
+    "imputation_strategy": None,
+    "outlier_removal": None,  # None, "zscore", "iqr"
     "outlier_threshold": 3.0,  # only for zscore
-    "feature_selection": "none",  # "none", "low_variance", "constant"
+    "feature_selection": None,  # None, "low_variance", "constant"
     "variance_threshold": 0.0,  # for low_variance
 }
 
@@ -46,11 +42,19 @@ class BaseClustering(ABC):
     frontend_name = None
     backend_name = None
 
-    def __init__(self, dataset_name, columns, **params):
-        self.params = params
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
+        self.clustering_params = clustering_params
         self.dataset_name = dataset_name
-        self.columns = columns
+        # TODO: @Ersel: Hier wird jetzt ein dict statt einer Liste erwartet.
+        # Dieses dict kann für die Codierung der Spalten verwendet werden.
+        self.columns: dict[str, str] = columns
+        self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
+
+        # Set default preprocessing parameters if not provided
+        for k, v in self.get_default_params().items():
+            if k not in self.clustering_params:
+                self.clustering_params[k] = v
 
     def load_data(self):
         try:
@@ -60,142 +64,52 @@ class BaseClustering(ABC):
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
             # Nur ausgewählte Spalten verwenden
-            return df[self.columns].to_numpy()
+            return df[[col.get("name") for col in self.columns]].to_numpy()
         except Exception as e:
             print(f"Error loading data: {str(e)}")
             raise
 
-    import numpy as np
+    def validate_params_sklearn(self):
+        try:
+            cls = self.get_sklearn_estimator_class()
+            model = cls(**self.clustering_params)
+            dummy = np.array([[0.1, 1.2], [0.3, 0.7], [1.1, 0.4], [0.0, 0.9]])
+            model.fit(dummy)
+        except Exception as e:
+            raise ValueError(f"Invalid parameters: {e}")
 
-    def validate_params(self):
-        """
-        Basic validation of input parameters.
-        This does not replace sklearn's internal validation,
-        but catches obvious issues early (e.g. wrong types, empty values).
-        """
-        for key, value in self.params.items():
-            # Disallow empty strings
-            if isinstance(value, str) and value.strip() == "":
-                raise ValueError(f"Parameter '{key}' cannot be an empty string.")
+    def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
+        nominal_cols = [col.get("name") for col in self.columns if col.get("type") == "nominal"]
 
-            # Disallow None (except for known valid exceptions)
-            if value is None and key not in ["preference", "init"]:
-                raise ValueError(f"Parameter '{key}' cannot be None.")
+        if ordinal_cols:
+            encoder = OrdinalEncoder()
+            df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
 
-            # Disallow negative numbers for common numerical parameters
-            if isinstance(value, int | float) and key in ["n_clusters", "max_iter", "n_init"] and value <= 0:
-                raise ValueError(f"Parameter '{key}' must be > 0.")
+        if nominal_cols:
+            ohe = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+            encoded = ohe.fit_transform(df[nominal_cols])
+            new_cols = ohe.get_feature_names_out(nominal_cols)
+            df_encoded = pd.DataFrame(encoded, columns=new_cols, index=df.index)
+
+            df.drop(columns=nominal_cols, inplace=True)
+            df = pd.concat([df, df_encoded], axis=1)
+
+        return df
 
     def prepare_data(self, data, preprocess=True):
-        # Apply preprocessing steps like scaling, normalization, and optional PCA
-        X = data
-
         if not preprocess:
-            return X
-
-        df = pd.DataFrame(X)
-        value_range = df.max() - df.min()
-
-        # Merge default params with user params (user values override defaults)
-        params = {**DEFAULT_PREPROCESSING_PARAMS, **self.params}
-
-        # Determine scaler
-        scaler_type = params["scaler"]
-        if scaler_type == "standard":
-            scaler = StandardScaler()
-        elif scaler_type == "minmax":
-            scaler = MinMaxScaler()
-        elif scaler_type == "robust":
-            scaler = RobustScaler()
-        elif scaler_type == "maxabs":
-            scaler = MaxAbsScaler()
-        elif scaler_type == "auto":
-            # Auto scaler selection based on feature range
-            scaler = RobustScaler() if value_range.max() > 1000 or value_range.min() < 0.001 else StandardScaler()
-        else:
-            raise ValueError(f"Unsupported scaler type: {scaler_type}")
-
-        X_scaled = scaler.fit_transform(X)
-
-        # Optional normalization
-        if params["use_normalization"]:
-            normalizer = Normalizer(norm=params["normalization_type"])
-            X_scaled = normalizer.fit_transform(X_scaled)
-
-        # Optional imputation (missing value handling)
-        imputation_strategy = params["imputation_strategy"]
-
-        if imputation_strategy == "mean":
-            df = pd.DataFrame(X_scaled)
-            X_scaled = df.fillna(df.mean()).to_numpy()
-        elif imputation_strategy == "median":
-            df = pd.DataFrame(X_scaled)
-            X_scaled = df.fillna(df.median()).to_numpy()
-        elif imputation_strategy == "none":
-            pass
-        else:
-            raise ValueError(f"Unsupported imputation strategy: {imputation_strategy}")
-
-        # Optional outlier removal
-        outlier_strategy = params["outlier_removal"]
-        threshold = params["outlier_threshold"]
-
-        if outlier_strategy == "zscore":
-            z_scores = np.abs((X_scaled - X_scaled.mean(axis=0)) / X_scaled.std(axis=0))
-            mask = (z_scores < threshold).all(axis=1)
-            X_scaled = X_scaled[mask]
-        elif outlier_strategy == "iqr":
-            Q1 = np.percentile(X_scaled, 25, axis=0)
-            Q3 = np.percentile(X_scaled, 75, axis=0)
-            IQR = Q3 - Q1
-            lower = Q1 - 1.5 * IQR
-            upper = Q3 + 1.5 * IQR
-            mask = ((X_scaled >= lower) & (X_scaled <= upper)).all(axis=1)
-            X_scaled = X_scaled[mask]
-        elif outlier_strategy == "none":
-            pass
-        else:
-            raise ValueError(f"Unsupported outlier removal strategy: {outlier_strategy}")
-
-        # Optional feature selection
-        feature_sel = params["feature_selection"]
-        var_thresh = params["variance_threshold"]
-
-        if feature_sel == "constant":
-            selector = VarianceThreshold(threshold=0.0)
-            X_scaled = selector.fit_transform(X_scaled)
-        elif feature_sel == "low_variance":
-            selector = VarianceThreshold(threshold=var_thresh)
-            X_scaled = selector.fit_transform(X_scaled)
-        elif feature_sel == "none":
-            pass
-        else:
-            raise ValueError(f"Unsupported feature_selection method: {feature_sel}")
-
-        # Optional PCA dimensionality reduction
-        if params["use_pca"] and X_scaled.shape[1] > params["pca_components"]:
-            pca = PCA(n_components=params["pca_components"])
-            X_scaled = pca.fit_transform(X_scaled)
-
-        # Optional post-scaling transformation
-        transform_type = params["transform_type"]
-
-        if transform_type == "quantile":
-            transformer = QuantileTransformer(output_distribution="normal")
-            X_scaled = transformer.fit_transform(X_scaled)
-        elif transform_type == "power":
-            transformer = PowerTransformer()
-            X_scaled = transformer.fit_transform(X_scaled)
-        elif transform_type not in (None, ""):
-            raise ValueError(f"Unsupported transform_type: {transform_type}")
-
-        return X_scaled
-
-    from abc import ABC
+            return data
+        try:
+            params_obj = PreProcessingParams(**(self.preprocessing_params or DEFAULT_PREPROCESSING_PARAMS))
+        except ValidationError as ve:
+            raise ValueError(f"Invalid preprocessing parameters: {ve}") from ve
+        pipeline = PreprocessingPipeline(params_obj)
+        return pipeline.fit_transform(data)
 
     @staticmethod
     @abstractmethod
-    def get_default_params():
+    def get_default_params() -> dict:
         """
         Must return a dictionary of default parameters.
         """
@@ -212,6 +126,7 @@ class BaseClustering(ABC):
         """
         try:
             print(f"Saving results for job_id: {job_id}")  # Debug print
+
             # Pop labels from result dictionary
             labels = result.pop("labels")
 
@@ -223,15 +138,21 @@ class BaseClustering(ABC):
                 "started_timestamp": started_timestamp,
                 "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
                 "clustering_algorithm": self.frontend_name,
-                "params": self.params,
+                "clustering_params": self.clustering_params,
+                "preprocessing_params": self.preprocessing_params,
                 "labels": labels,
                 "additional_results": result,
             }
 
+            payload = self._sanitize_inf(payload)
+
             # Post the result to FastAPI backend
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/"
             print(f"Sending results to: {url}")  # Debug print
-            response = requests.post(f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/", json=payload)
+            response = requests.post(
+                f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/result/",
+                json=payload,
+            )
 
             if response.status_code != 200:
                 print(f"Error saving results: {response.text}")
@@ -241,3 +162,17 @@ class BaseClustering(ABC):
         except Exception as e:
             print(f"Error in save_results: {str(e)}")
             return None
+
+    def _sanitize_inf(self, obj):
+        if isinstance(obj, dict):
+            return {k: self._sanitize_inf(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._sanitize_inf(v) for v in obj]
+        elif isinstance(obj, float):
+            if math.isinf(obj):
+                return "inf" if obj > 0 else "-inf"
+            if math.isnan(obj):
+                return "nan"
+            return obj
+        else:
+            return obj

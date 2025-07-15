@@ -1,10 +1,8 @@
-import io
-import json
 import os
 import sys
 import time
+from typing import Literal, get_args
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -12,6 +10,7 @@ import streamlit as st
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
+from clustering.preprocessing_params import PreProcessingParams
 
 FASTAPI_HOST = os.getenv("FASTAPI_HOST")
 FASTAPI_PORT = os.getenv("FASTAPI_PORT")
@@ -37,7 +36,7 @@ def get_dataset_list():
 
 def delete_dataset_backend(dataset_name):
     try:
-        resp = requests.delete(f"{FASTAPI_URL}/datasets/{dataset_name}")
+        resp = requests.delete(f"{FASTAPI_URL}/dataset/{dataset_name}")
         return resp.status_code == 200
     except Exception:
         return False
@@ -48,13 +47,29 @@ def get_available_clustering_algorithms():
     Dynamically loads all clustering algorithms from the clustering directory.
     Excludes abstract base class.
     """
+
     algorithms = {
-        getattr(wrappers, algo).frontend_name: getattr(wrappers, algo).backend_name
+        getattr(wrappers, algo).frontend_name: getattr(wrappers, algo)
         for algo in dir(wrappers)
         if algo.endswith("Wrapper")
     }
 
     return algorithms
+
+
+def parse_params_value(value) -> str | int | float | bool | None:
+    if not isinstance(value, str):
+        return value
+    if value.lower() == "none":
+        return None
+    elif value.lower() in ["true", "false"]:
+        return value.lower() == "true"
+    elif value.isdigit():
+        return int(value)
+    elif value.replace(".", "", 1).isdigit():
+        return float(value)
+    else:
+        return value
 
 
 # --- Upload Section ---
@@ -68,7 +83,7 @@ if uploaded_file:
         # Prepare file for upload
         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
         try:
-            res = requests.put(f"{FASTAPI_URL}/upload/", files=files)
+            res = requests.put(f"{FASTAPI_URL}/dataset/", files=files)
             if res.status_code == 200:
                 response = res.json()
                 st.session_state["dataset_name"] = response.get("dataset_name", "")
@@ -120,64 +135,207 @@ else:
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
 
-    # Load columns from selected dataset
+    # Lade Spalten und Typen aus Backend
+    available_columns = []
     try:
-        if uploaded_file and st.session_state["dataset_name"] == uploaded_file.name:
-            available_columns = df.columns.tolist()
-        else:
-            # Load dataset from backend if not currently uploaded
-            resp = requests.get(f"{FASTAPI_URL}/dataset/{st.session_state['dataset_name']}")
-            if resp.status_code == 200:
-                temp_df = pd.read_csv(io.StringIO(resp.content.decode("utf-8")))
-                available_columns = temp_df.columns.tolist()
-            else:
-                available_columns = []
-
-        # Column selection interface
-        if available_columns:
-            use_all_columns = st.checkbox("Alle Spalten verwenden", value=True)
-            if use_all_columns:
-                columns = available_columns
-                st.info(f"Verwende alle Spalten: {', '.join(columns)}")
-            else:
-                columns = st.multiselect(
-                    "Spalten für Clustering auswählen",
-                    options=available_columns,
-                    default=available_columns,
-                )
-                if not columns:
-                    st.warning("Bitte mindestens eine Spalte auswählen!")
-        else:
-            st.error("Keine Spalten im Datensatz gefunden!")
-            columns = []
+        resp = requests.get(f"{FASTAPI_URL}/metadata/{st.session_state['dataset_name']}")
+        available_columns = resp.json().get("columns") if resp.status_code == 200 else []
 
     except Exception as e:
-        st.error(f"Fehler beim Laden der Spalten: {e}")
-        columns = []
+        st.error(f"Fehler beim Laden der Spalteninformationen: {e}")
+        available_columns = []
 
-    # Dynamic algorithm selection
-    clustering_algorithms = get_available_clustering_algorithms()
-    clustering_algorithm = st.selectbox(
-        "Clustering-Algorithmus auswählen", options=sorted(clustering_algorithms.keys())
-    )
-    preprocess = st.checkbox("Preprocessing", value=True)
-    clustering_params = {}
-    preprocessing_params = {}
+    if available_columns:
+        st.markdown("**Spaltenauswahl**")
+
+        if "column_selection" not in st.session_state or st.session_state["dataset_name"] != st.session_state.get(
+            "last_column_selection_dataset", ""
+        ):
+            st.session_state["column_selection"] = {
+                column["name"]: {
+                    "use": True,
+                    "selected_type": column["allowed_types"][0],
+                    "allowed_types": column["allowed_types"],
+                }
+                for column in available_columns
+            }
+            st.session_state["last_column_selection_dataset"] = st.session_state["dataset_name"]
+
+        all_selected = all(
+            st.session_state["column_selection"][col]["use"] for col in st.session_state["column_selection"]
+        )
+        select_all = st.checkbox("Alle Spalten auswählen", value=all_selected, key="select_all_columns")
+
+        # Synchronisiere Einzel-Checkboxen, wenn "Alle auswählen" geändert wurde
+        if select_all != all_selected:
+            for col in st.session_state["column_selection"]:
+                st.session_state["column_selection"][col]["use"] = select_all
+
+        # Tabellen-Header
+        header = st.columns([1, 3, 2])
+        header[0].markdown("**Verwenden**")
+        header[1].markdown("**Spaltenname**")
+        header[2].markdown("**Typ**")
+
+        # Jede Spalte als eigene Zeile, immer sauber ausgerichtet
+        for col in available_columns:
+            col_name = col["name"]
+            use = st.session_state["column_selection"][col_name]["use"]
+            row = st.columns([1, 3, 2])
+            # Checkbox für verwenden
+            new_use = row[0].checkbox("", value=use, key=f"use_{col_name}")
+            st.session_state["column_selection"][col_name]["use"] = new_use
+            # Spaltenname
+            row[1].markdown(f"{col_name}")
+            new_type = row[2].selectbox(
+                "",
+                options=st.session_state["column_selection"][col_name]["allowed_types"],
+                index=st.session_state["column_selection"][col_name]["allowed_types"].index(
+                    st.session_state["column_selection"][col_name]["selected_type"]
+                ),
+                key=f"type_{col_name}",
+            )
+            st.session_state["column_selection"][col_name]["selected_type"] = new_type
+
+    else:
+        st.error("Keine Spalten im Datensatz gefunden!")
+
+    # Spalten für Clustering
+    columns = [
+        {"name": col, "type": st.session_state["column_selection"][col]["selected_type"]}
+        for col in st.session_state["column_selection"]
+        if st.session_state["column_selection"][col]["use"]
+    ]
+
+    use_automl = st.checkbox("AutoML verwenden (automatische Algorithmusauswahl)", value=False)
+
+    selected_cluster_algorithms = []
+    selected_dim_reduction = []
+    selected_evaluators = []
+
+    if use_automl:
+        # Mehrfachauswahl für Clustering-Algorithmen
+        available_cluster_algorithms = [
+            "KMeans",
+            "GaussianMixture",
+            "Birch",
+            "MiniBatchKMeans",
+            "AgglomerativeClustering",
+            "SpectralClustering",
+        ]
+        selected_cluster_algorithms = st.multiselect(
+            "Clustering-Algorithmen auswählen",
+            available_cluster_algorithms,
+            default=available_cluster_algorithms,
+        )
+
+        # Mehrfachauswahl für Dimensionality Reduction
+        available_dim_reduction = [
+            "TSNE",
+            "PCA",
+            "IncrementalPCA",
+            "KernelPCA",
+            "FastICA",
+            "TruncatedSVD",
+        ]
+        selected_dim_reduction = st.multiselect(
+            "Dimensionality Reduction auswählen",
+            available_dim_reduction,
+            default=available_dim_reduction,
+        )
+
+        # Mehrfachauswahl für Evaluator
+        available_evaluators = [
+            "silhouetteScore",
+            "daviesBouldinScore",
+            "calinskiHarabaszScore",
+        ]
+        selected_evaluators = st.multiselect("Evaluator auswählen", available_evaluators, default=available_evaluators)
+
+        n_evaluations = st.slider("Anzahl AutoML Evaluationen", min_value=10, max_value=200, value=50, step=10)
+        cutoff_time = st.slider(
+            "Maximale Laufzeit pro Evaluation (Sekunden)",
+            min_value=10,
+            max_value=300,
+            value=60,
+            step=10,
+        )
+
+    else:
+        # Dynamic algorithm selection
+        clustering_algorithms = get_available_clustering_algorithms()
+        clustering_algorithm = st.selectbox(
+            "Clustering-Algorithmus auswählen",
+            options=sorted(clustering_algorithms.keys()),
+        )
+        clustering_params = clustering_algorithms.get(clustering_algorithm).get_default_params()
+        chosen_clustering_params = {}
+        with st.expander("Clustering-Parameter konfigurieren"):
+            for k, v in clustering_params.items():
+                chosen_clustering_params[k] = st.text_input(label=k, value=str(v))
+
+        preprocess = st.checkbox("Preprocessing", value=True)
+        preprocessing_params = PreProcessingParams().model_dump()
+        chosen_preprocessing_params = {}
+        allowed_values = {}
+        for name, field in PreProcessingParams.model_fields.items():
+            annotation = field.annotation
+            # Only process Literal fields
+            if getattr(annotation, "__origin__", None) is Literal:
+                allowed_values[name] = get_args(annotation)
+
+        if preprocess:
+            with st.expander("Preprocessing-Parameter konfigurieren"):
+                for k, v in preprocessing_params.items():
+                    if k in allowed_values:
+                        chosen_preprocessing_params[k] = parse_params_value(
+                            st.selectbox(label=k, options=allowed_values[k])
+                        )
+                    elif isinstance(v, bool):
+                        chosen_preprocessing_params[k] = parse_params_value(
+                            st.selectbox(label=k, options=["False", "True"])
+                        )
+                    else:
+                        chosen_preprocessing_params[k] = parse_params_value(st.text_input(label=k, value=str(v)))
+                # chosen_preprocessing_params = PreProcessingParams(
+                #     **chosen_preprocessing_params
+                # )
 
     if st.button("Clustering starten"):
-        data = {
-            "dataset_name": st.session_state["dataset_name"],
-            "columns": columns,
-            "clustering_algorithm": clustering_algorithms.get(clustering_algorithm),
-            "preprocess": preprocess,
-            "clustering_params": clustering_params,
-            "preprocessing_params": preprocessing_params
-        }
+        dataset_name = st.session_state["dataset_name"]
 
-        print(data)
+        cluster_url = f"{FASTAPI_URL}/automl/job" if use_automl else f"{FASTAPI_URL}/job/"
+        cutoff_time = 120  # Default cutoff time for manual clustering
+
+        if use_automl:
+            dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
+            data = {
+                "dataset_name": dataset_name,
+                "columns": columns,
+                "clustering_algorithms": selected_cluster_algorithms,
+                "dim_reduction_algorithms": selected_dim_reduction or None,
+                "evaluator_ls": selected_evaluators,
+                "n_evaluations": n_evaluations,
+                "cutoff_time": cutoff_time,
+            }
+
+        else:
+            if preprocess:
+                filtered_preprocessing_params = {k: v for k, v in chosen_preprocessing_params.items() if v is not None}
+            else:
+                filtered_preprocessing_params = None
+            # === Manueller Pfad ===
+            data = {
+                "dataset_name": dataset_name,
+                "columns": columns,
+                "clustering_algorithm": clustering_algorithms.get(clustering_algorithm).backend_name,
+                "preprocess": preprocess,
+                "clustering_params": chosen_clustering_params,
+                "preprocessing_params": (filtered_preprocessing_params),
+            }
 
         try:
-            res = requests.post(f"{FASTAPI_URL}/cluster/", json=data)
+            res = requests.post(cluster_url, json=data)
             if res.status_code == 200:
                 response = res.json()
                 job_id = response.get("job_id", "")
@@ -187,7 +345,7 @@ if st.session_state["dataset_name"]:
                 # Fortschrittsanzeige
                 status_placeholder = st.empty()
                 progress = 0
-                max_wait = 120  # max 2 Minuten warten
+                max_wait = cutoff_time  # max 2 Minuten warten
                 poll_interval = 2  # alle 2 Sekunden abfragen
 
                 for _ in range(max_wait // poll_interval):
@@ -274,27 +432,48 @@ elif job_select_mode == "Job-Historie":
     else:
         st.info("Keine Jobs vorhanden.")
 
-presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Tabelle", "Rohdaten", "Graph"])
+presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Graph", "Tabelle"])
+
+if presentation == "Graph" and input_job_id:
+    url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
+    response = requests.get(url, params={"field": "columns"})
+
+    if response.status_code == 404:
+        st.error("Keine Ergebnisse für diese Job-ID gefunden.")
+        st.stop()
+    else:
+        available_result_columns = response.json()
+        available_result_columns = [col.get("name") for col in available_result_columns]
+        selected_result_columns = st.multiselect(
+            "Welche Spalten sollen für den Graphen verwendet werden?",
+            options=available_result_columns,
+            default=available_result_columns[:2],
+            max_selections=2,
+        )
 
 if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {"Tabelle": "table", "Rohdaten": "raw", "Graph": "graph"}
+    mapping = {"Tabelle": "table", "Graph": "graph"}
     pres = mapping[presentation]
-    url = f"{FASTAPI_URL}/cluster/{input_job_id}/{pres}"
+    url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
+
+    if len(selected_result_columns) != 2 and pres == "graph":
+        st.error("Für den Graphen müssen genau zwei Spalten ausgewählt werden.")
+        st.stop()
     try:
-        resp = requests.get(url)
+        params = (
+            None
+            if pres == "table"
+            else {
+                "x_column": selected_result_columns[0],
+                "y_column": selected_result_columns[1],
+            }
+        )
+        resp = requests.get(url, params=params)
         if resp.status_code == 200:
             data = resp.json()
             # Präsentation auf voller Breite
             if pres == "table":
-                if "data" in data and "columns" in data:
-                    df = pd.DataFrame(data["data"], columns=data["columns"])
-                    st.write(df)
-                elif "labels" in data:
-                    st.write(pd.DataFrame({"labels": data["labels"]}))
-                else:
-                    st.warning("Keine Tabellendaten vorhanden.")
-            elif pres == "raw":
-                st.write(np.array(data))
+                st.dataframe(pd.DataFrame(data), use_container_width=True)
             elif pres == "graph":
                 fig = go.Figure(data)
                 if not fig.data:
