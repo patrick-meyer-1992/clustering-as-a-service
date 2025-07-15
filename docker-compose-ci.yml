@@ -70,8 +70,11 @@ services:
     environment:
       - REDIS_HOST=test-caas-redis
       - REDIS_PORT=6379
-      - RABBITMQ_HOST=caas-rabbitmq
+      - RABBITMQ_HOST=test-caas-rabbitmq
       - RABBITMQ_PORT=5672
+      - FASTAPI_HOST=test-caas-fastapi
+      - FASTAPI_PORT=8000
+      - FASTAPI_PROTOCOL=http
     depends_on:
       - redis
     restart: always
