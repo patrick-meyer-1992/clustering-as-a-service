@@ -203,7 +203,6 @@ class BisectingKMeansWrapper(BaseClustering):
                 "labels": labels.tolist(),
                 "cluster_centers": model.cluster_centers_.tolist(),
                 "inertia": float(model.inertia_),
-                "n_iter": model.n_iter_.tolist(),
                 "cluster_sizes": dict(cluster_sizes),
             }
 
