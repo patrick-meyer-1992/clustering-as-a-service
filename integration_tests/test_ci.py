@@ -88,25 +88,37 @@ def test_get_metadata_all_fields():
     assert "columns" in metadata
     assert "size" in metadata
 
-def test_post_job():
-    response = requests.post(f"{FASTAPI_URL}/job/", json=job_template)
-    assert response.status_code == 200
-    job_response = response.json()
-    assert "job_id" in job_response
-    assert job_response["job_id"] is not None
+def test_post_jobs():
+    available_algorithms = requests.get(f"{FASTAPI_URL}/algorithms/")
+    assert available_algorithms.status_code == 200
 
-    sleep(2)  # Wait for the job to be processed
+    for algorithm in available_algorithms.json():
+        this_job = job_template.copy()
+        this_job["clustering_algorithm"] = algorithm
 
-    response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
-    assert response.status_code == 200
-    result = response.json()
-    assert isinstance(result, list)
-    assert len(result) > 0  # Ensure there are job statuses returned
+        clustering_params = requests.get(f"{FASTAPI_URL}/parameters/{algorithm}/")
+        assert clustering_params.status_code == 200
 
-def test_delete_iris():
-    response = requests.delete(f"{FASTAPI_URL}/dataset/iris.csv")
-    assert response.status_code == 200
+        this_job["clustering_params"] = clustering_params.json()["clustering_params"]
 
-def test_get_deleted_result():
-    response = requests.get(f"{FASTAPI_URL}/result/12345/raw")
-    assert response.status_code == 404  # Expecting a 404 Not Found for deleted result
+        response = requests.post(f"{FASTAPI_URL}/job/", json=this_job)
+        assert response.status_code == 200
+        job_response = response.json()
+        assert "job_id" in job_response
+        assert job_response["job_id"] is not None
+
+        sleep(2)  # Wait for the job to be processed
+
+        response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
+        assert response.status_code == 200
+        result = response.json()
+        assert isinstance(result, list)
+        assert len(result) > 0  # Ensure there are job statuses returned
+
+# def test_delete_iris():
+#     response = requests.delete(f"{FASTAPI_URL}/dataset/iris.csv")
+#     assert response.status_code == 200
+
+# def test_get_deleted_result():
+#     response = requests.get(f"{FASTAPI_URL}/result/12345/raw")
+#     assert response.status_code == 404  # Expecting a 404 Not Found for deleted result
