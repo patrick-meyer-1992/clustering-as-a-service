@@ -19,7 +19,7 @@ jobs:
 
       - name: Start services
         run: |
-          docker-compose -f docker-compose-ci.yml up -d
+          docker compose -f docker-compose-ci.yml up -d
           
       - name: Wait for services
         run: |
@@ -37,4 +37,4 @@ jobs:
           FASTAPI_URL: http://localhost:7002
 
       - name: Stop services
-        run: docker-compose -f docker-compose-ci.yml down
+        run: docker compose -f docker-compose-ci.yml down
