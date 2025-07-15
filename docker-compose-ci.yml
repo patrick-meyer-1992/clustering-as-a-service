@@ -67,9 +67,11 @@ services:
     build:
       context: ./app
       dockerfile: automl.Dockerfile
-    env_file:
-      - ./message_broker/.env
-      - ./redis/.env
+    environment:
+      - REDIS_HOST=test-caas-redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=caas-rabbitmq
+      - RABBITMQ_PORT=5672
     depends_on:
       - redis
     restart: always
