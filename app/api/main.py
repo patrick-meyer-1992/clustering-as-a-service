@@ -72,14 +72,13 @@ def validate_data(data):
 
 class DatasetField(str, Enum):
     dataset_name = "dataset_name"
-    content_type = "content_type"
     columns = "columns"
     size = "size"
 
 
 @app.get(
     "/metadata/{dataset_name}",
-    response_model=dict[str, str | list[dict[str, str | list[str]]]],
+    response_model=dict[str, str | int | list[dict[str, str | list[str]]]],
 )
 async def get_metadata(
     dataset_name: str,
@@ -89,22 +88,18 @@ async def get_metadata(
     ),
     mongodb_database=Depends(get_mongodb),
 ):
-    try:
-        data_collection = mongodb_database.get_collection("data")
-        # Check if the dataset exists
-        exists = await data_collection.find_one({"dataset_name": dataset_name})
-        if not exists:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+    data_collection = mongodb_database.get_collection("data")
+    # Check if the dataset exists
+    exists = await data_collection.find_one({"dataset_name": dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
-        # Fetch the specified fields from the dataset
-        fields_to_return = {field.value: 1 for field in fields}
-        fields_to_return["_id"] = 0  # Exclude the _id field
-        response = await data_collection.find_one({"dataset_name": dataset_name}, fields_to_return)
+    # Fetch the specified fields from the dataset
+    fields_to_return = {field.value: 1 for field in fields}
+    fields_to_return["_id"] = 0  # Exclude the _id field
+    response = await data_collection.find_one({"dataset_name": dataset_name}, fields_to_return)
 
-        return response
-    except Exception as e:
-        print(f"Error retrieving dataset: {e}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    return response
 
 
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
@@ -112,24 +107,21 @@ async def get_dataset(
     dataset_name: str,
     mongodb_database=Depends(get_mongodb),
 ):
-    try:
-        # Hole den Datensatz aus MongoDB
-        data_collection = mongodb_database.get_collection("data")
-        dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+    # Hole den Datensatz aus MongoDB
+    data_collection = mongodb_database.get_collection("data")
+    dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
+    print(f"Retrieved dataset: {dataset_name}")
 
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
-        # Erstelle einen StreamingResponse für die CSV-Daten
-        file_stream = io.StringIO(dataset["data"])
-        return StreamingResponse(
-            file_stream,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={dataset_name}"},
-        )
-    except Exception as e:
-        print(f"Error retrieving dataset: {e}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    # Erstelle einen StreamingResponse für die CSV-Daten
+    file_stream = io.StringIO(dataset["data"])
+    return StreamingResponse(
+        file_stream,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={dataset_name}"},
+    )
 
 
 class DatasetPutResponse(BaseModel):
@@ -348,6 +340,8 @@ async def post_job(
     req: JobPostRequest,
     mongodb_database=Depends(get_mongodb),
 ) -> JobPostResponse:
+    if req.clustering_params is None:
+        req.clustering_params = {}
     clustering_params = parse_params(req.clustering_params)
 
     data_collection = mongodb_database.get_collection("data")
@@ -488,14 +482,11 @@ async def get_result_raw(
     ),
     mongodb_database=Depends(get_mongodb),
 ) -> Any:
-    try:
-        result_collection = mongodb_database.get_collection("results")
-        result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
-        if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
-        return result.get(field)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    result_collection = mongodb_database.get_collection("results")
+    result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+    return result.get(field)
 
 
 @app.get("/result/{job_id}/graph")

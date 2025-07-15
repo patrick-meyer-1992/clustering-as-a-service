@@ -1,5 +1,8 @@
 #!/bin/bash
 
-docker run --name test-mongo -p 27018:27017 -d mongo
-pytest
-docker stop test-mongo && docker rm test-mongo
+docker compose -f docker-compose-ci.yml down   && \
+docker compose -f docker-compose-ci.yml up   -d --build
+
+sleep 2
+
+pytest integration_tests/

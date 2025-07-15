@@ -1,0 +1,75 @@
+services:
+  fastapi:
+    container_name: test-caas-fastapi
+    build:
+      context: ./app
+      dockerfile: fastapi.Dockerfile
+    ports:
+      - "7002:8000"
+    environment:
+      - REDIS_HOST=test-caas-redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=test-caas-rabbitmq
+      - RABBITMQ_PORT=5672
+      - MONGODB_DB=caas
+      - MONGODB_HOST=test-caas-mongodb
+      - MONGODB_PORT=27017
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: test-caas-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_DEFAULT_VHOST=/
+    tmpfs:
+      - /var/lib/rabbitmq
+      - /var/log/rabbitmq
+    
+  clustering:
+    container_name: test-caas-clustering_worker
+    build:
+      context: ./app
+      dockerfile: clustering_worker.Dockerfile
+    environment:
+      - RABBITMQ_HOST=test-caas-rabbitmq
+      - RABBITMQ_PORT=5672
+      - REDIS_HOST=test-caas-redis
+      - REDIS_PORT=6379
+      - FASTAPI_HOST=test-caas-fastapi
+      - FASTAPI_PORT=8000
+      - FASTAPI_PROTOCOL=http
+
+    depends_on:
+      - rabbitmq
+
+  mongodb:
+    image: mongo
+    container_name: test-caas-mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - ./mongodb/init:/docker-entrypoint-initdb.d
+    tmpfs:
+      - /data/db
+
+  redis:
+    image: redis
+    restart: unless-stopped
+    container_name: test-caas-redis
+
+  automl-worker:
+    container_name: test-caas-automl_worker
+    build:
+      context: ./app
+      dockerfile: automl.Dockerfile
+    env_file:
+      - ./message_broker/.env
+      - ./redis/.env
+    depends_on:
+      - redis
+    restart: always
