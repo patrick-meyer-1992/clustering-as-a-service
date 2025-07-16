@@ -64,7 +64,7 @@ class BaseClustering(ABC):
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
             # Nur ausgewählte Spalten verwenden
-            return df[[col.get("name") for col in self.columns]].to_numpy()
+            return df[[col.get("name") for col in self.columns]]
         except Exception as e:
             print(f"Error loading data: {str(e)}")
             raise
