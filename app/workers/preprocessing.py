@@ -1,4 +1,7 @@
+import logging
+from workers.logger import setup_logger
 
+logger = setup_logger(__name__)
 
 def build_preprocess_dict(columns_list):
     """
@@ -9,7 +12,7 @@ def build_preprocess_dict(columns_list):
     - numeric_cols
     - categorical_cols (for type 'nominal')
     - ordinal_cols
-    - y_col (always empty)
+    - y_col (always empty for unsupervised clustering)
 
     :param columns_list: List of dicts with 'name' and 'type' keys
     :return: Dictionary in the expected preprocess_dict format
@@ -23,7 +26,7 @@ def build_preprocess_dict(columns_list):
         col_type = col.get("type")
 
         if not col_name or not col_type:
-            print(f"[WARN] Skipping malformed column entry: {col}")
+            logger.warning(f"[Preprocessing] Skipping malformed column entry: {col}")
             continue
 
         if col_type == "numeric":
@@ -33,15 +36,18 @@ def build_preprocess_dict(columns_list):
         elif col_type == "ordinal":
             ordinal_cols.append(col_name)
         else:
-            print(f"[WARN] Unknown column type for '{col_name}': '{col_type}' – skipping.")
+            logger.warning(f"[Preprocessing] Unknown column type for '{col_name}': '{col_type}' – skipping.")
 
-    return {
+    preprocess_dict = {
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
         "ordinal_cols": ordinal_cols,
         "y_col": []  # No label column in unsupervised clustering
     }
 
-#TODO: Column checks
+    logger.debug(f"[Preprocessing] Built preprocess_dict: {preprocess_dict}")
+    return preprocess_dict
 
 
+# TODO: Optional – Validate column types against allowed values (numeric, nominal, ordinal)
+#       Raise or collect warnings if invalid types are found

@@ -1,15 +1,29 @@
+import logging
 from autocluster import get_evaluator, MetafeatureMapper
-
 from workers.preprocessing import build_preprocess_dict
+from workers.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
-def prepare_fit_params(df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations):
+def prepare_fit_params(df, columns, clustering_algorithms, dim_reduction_algorithms,
+                       evaluator_ls, cutoff_time, n_evaluations):
     if not dim_reduction_algorithms:
         dim_reduction_algorithms = ['NullModel']
+        logger.warning("No dim_reduction_algorithms provided. Using default: ['NullModel']")
+
     if not evaluator_ls:
         evaluator_ls = ['silhouetteScore', 'daviesBouldinScore', 'calinskiHarabaszScore']
+        logger.warning("No evaluator list provided. Using default evaluators.")
 
     preprocessing_dict = build_preprocess_dict(columns)
+
+    logger.info("Preparing fit parameters for AutoML job")
+    logger.debug(f"Selected clustering algorithms: {clustering_algorithms}")
+    logger.debug(f"Selected dim reduction algorithms: {dim_reduction_algorithms}")
+    logger.debug(f"Selected evaluators: {evaluator_ls}")
+    logger.debug(f"Cutoff time: {cutoff_time}, evaluations: {n_evaluations}")
+    logger.debug(f"Preprocessing dict: {preprocessing_dict}")
 
     return {
         "df": df,
