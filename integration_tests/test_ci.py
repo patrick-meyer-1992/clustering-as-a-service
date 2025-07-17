@@ -137,7 +137,7 @@ def test_post_jobs_iris():
         assert "job_id" in job_response
         assert job_response["job_id"] is not None
 
-        sleep(2)  # Wait for the job to be processed
+        sleep(5)  # Wait for the job to be processed
 
         response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
         assert response.status_code == 200
@@ -200,8 +200,14 @@ def test_automl_iris():
     body ={
         "clustering_algorithms": available_cluster_algorithms,
         "columns": [
-            "sepal.length",
-            "sepal.width"
+            {
+                "name": "sepal.length",
+                "type": "numeric",
+            },
+            {
+                "name": "sepal.width",
+                "type": "numeric",
+            },
         ],
         "cutoff_time": 45,
         "dataset_name": "iris.csv",
