@@ -707,6 +707,7 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
         task_kwargs = {
             "dataset_name": req.dataset_name,
             "columns": req.columns,
+            "created_timestamp": datetime.now(TIMEZONE).isoformat(),
             "clustering_algorithms": req.clustering_algorithms,
             "dim_reduction_algorithms": req.dim_reduction_algorithms,
             "evaluator_ls": req.evaluator_ls,
