@@ -620,7 +620,7 @@ async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongo
 
 class AutoMlClusterRequest(BaseModel):
     dataset_name: str = Field(..., description="The name of the dataset")
-    columns: list[str] = Field(..., description="The columns to use for clustering")
+    columns: list[dict[str, str]] | None = Field(description="The columns to use for clustering", default=None)
     clustering_algorithms: list[str] | None = Field(
         default=None,
         description="List of clustering algorithms to use (e.g., KMeans, DBSCAN)",
