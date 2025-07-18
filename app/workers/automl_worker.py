@@ -34,17 +34,21 @@ def run_autocluster_job(
     )
 
     try:
+        logger.debug(f"[AutoML][{job_id}] Fetching dataset")
         df = fetch_dataset(job_id, dataset_name, columns)
 
+        logger.debug(f"[AutoML][{job_id}] Preparing fit params")
         fit_params = prepare_fit_params(
             df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations
         )
 
         started_timestamp = datetime.now(TIMEZONE).isoformat()
 
+        logger.debug(f"[AutoML][{job_id}] Running autocluster")
         cluster = AutoCluster()
         result_dict = cluster.fit(**fit_params)
 
+        logger.debug(f"[AutoML][{job_id}] Sending results to backend")
         send_results_to_backend(
             job_id, dataset_name, columns, created_timestamp, started_timestamp, result_dict, cluster, df
         )
@@ -62,16 +66,19 @@ if __name__ == "__main__":
         job_id = sys.argv[1]
         dataset_name = sys.argv[2]
         columns = json.loads(sys.argv[3])
-        optional_params = json.loads(sys.argv[4]) if len(sys.argv) > 4 else {}
+        created_timestamp = sys.argv[4]
+        optional_params = json.loads(sys.argv[5]) if len(sys.argv) > 5 else {}
 
         logger.info(
             f"[AutoML][{job_id}] Subprocess started | "
             f"dataset_name={dataset_name}, "
             f"columns={columns}, "
+            f"created_timestamp={created_timestamp}, "
             f"optional_params={optional_params}"
         )
 
-        run_autocluster_job(job_id=job_id, dataset_name=dataset_name, columns=columns, **optional_params)
+        run_autocluster_job(job_id=job_id, dataset_name=dataset_name, columns=columns, 
+                            created_timestamp=created_timestamp, **optional_params)
 
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Exception in __main__ block {e}")

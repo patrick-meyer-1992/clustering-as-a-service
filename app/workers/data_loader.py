@@ -25,6 +25,7 @@ def fetch_dataset(job_id, dataset_name, columns):
         logger.exception(f"[AutoML][{job_id}] Fetch dataset failed: {e}")
         raise
 
-    logger.info(f"[AutoML][{job_id}] Dataset successfully filtered to columns {column_names}, ", 
-                f"final shape: {df.shape}")
+    logger.info("[AutoML][%s] Dataset successfully filtered to columns %s, " \
+                "final shape: %s", job_id, column_names, df.shape)
+
     return df
