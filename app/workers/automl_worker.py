@@ -52,8 +52,8 @@ def run_autocluster_job(
         logger.info(f"[AutoML][{job_id}] Result successfully sent.")
         return None
 
-    except Exception:
-        logger.exception(f"[AutoML][{job_id}] Unhandled error during AutoML job")
+    except Exception as e:
+        logger.exception(f"[AutoML][{job_id}] Unhandled error during AutoML job {e}")
         return None
 
 
@@ -73,5 +73,5 @@ if __name__ == "__main__":
 
         run_autocluster_job(job_id=job_id, dataset_name=dataset_name, columns=columns, **optional_params)
 
-    except Exception:
-        logger.exception(f"[AutoML][{job_id}] Exception in __main__ block")
+    except Exception as e:
+        logger.exception(f"[AutoML][{job_id}] Exception in __main__ block {e}")
