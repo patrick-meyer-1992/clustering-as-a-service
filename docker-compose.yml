@@ -15,6 +15,7 @@ services:
       - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
+      - FLOWER_URL=http://caas-flower:5555
 
   streamlit:
     container_name: caas-streamlit

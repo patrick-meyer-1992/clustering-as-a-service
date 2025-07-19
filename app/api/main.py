@@ -28,6 +28,8 @@ ALGORITHM_MAP = {
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
 
+FLOWER_URL = os.getenv("FLOWER_URL")
+
 
 async def get_mongodb():
     MONGODB_DB = os.getenv("MONGODB_DB")
@@ -430,7 +432,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
         job["status"] = "PERSISTED"
     mongodb_job_ids = [job["job_id"] for job in mongodb_jobs]
 
-    response = requests.get("http://caas-flower:5555/api/tasks")
+    response = requests.get(f"{FLOWER_URL}/api/tasks")
 
     if response.status_code != 200:
         print(f"Error fetching jobs from Flower: {response.text}")
