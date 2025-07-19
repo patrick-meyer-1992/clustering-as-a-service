@@ -23,34 +23,29 @@ def run_clustering_job(
     preprocessing_params,
     **clustering_params,
 ):
-    try:
-        print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
-        started_timestamp = datetime.now(TIMEZONE).isoformat()
+    print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
+    started_timestamp = datetime.now(TIMEZONE).isoformat()
 
-        job_id = self.request.id
+    job_id = self.request.id
 
-        algorithm_name = clustering_algorithm.lower()
-        if algorithm_name not in ALGORITHM_MAP:
-            raise ValueError(f"Unsupported algorithm: {algorithm_name}")
+    algorithm_name = clustering_algorithm.lower()
+    if algorithm_name not in ALGORITHM_MAP:
+        raise ValueError(f"Unsupported algorithm: {algorithm_name}")
 
-        clustering_class = ALGORITHM_MAP[algorithm_name]
-        clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
+    clustering_class = ALGORITHM_MAP[algorithm_name]
+    clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
-        # Clustering parameters validation
-        # Temporarily removed because it throws false positive errors when n_clusters > 4
-        # clustering.validate_params_sklearn()
+    # Clustering parameters validation
+    # Temporarily removed because it throws false positive errors when n_clusters > 4
+    # clustering.validate_params_sklearn()
 
-        data = clustering.load_data()
+    data = clustering.load_data()
 
-        # Encoding nominal or ordinal columns
-        df = clustering.encode_data(data)
-        data = df.to_numpy()
+    # Encoding nominal or ordinal columns
+    df = clustering.encode_data(data)
+    data = df.to_numpy()
 
-        data = clustering.prepare_data(data, preprocess)
-        result = clustering.run(data)
+    data = clustering.prepare_data(data, preprocess)
+    result = clustering.run(data)
 
-        clustering.save_results(result, job_id, created_timestamp, started_timestamp)
-
-    except Exception as e:
-        print(f"Error in clustering job: {str(e)}")
-        return {"status": "error", "message": str(e)}
+    clustering.save_results(result, job_id, created_timestamp, started_timestamp)
