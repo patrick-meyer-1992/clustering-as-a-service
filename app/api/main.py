@@ -435,8 +435,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
     response = requests.get(f"{FLOWER_URL}/api/tasks")
 
     if response.status_code != 200:
-        print(f"Error fetching jobs from Flower: {response.text}")
-        raise HTTPException(status_code=500, detail="Error fetching jobs from Flower")
+        raise HTTPException(status_code=500, detail=f"Error fetching jobs from Flower: {response.text}")
 
     flower_jobs = list()
     for job_id in response.json():
@@ -463,29 +462,6 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
         reverse=True,
     )
     return result
-
-    try:
-        results_collection = mongodb_database.get_collection("results")
-        jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
-        job_list = []
-        for job in jobs:
-            job_id = job.get("job_id")
-            celery_status = None
-            if job_id:
-                task = celery.AsyncResult(job_id)
-                celery_status = task.status
-            job_list.append(
-                JobsGetResponse(
-                    job_id=job_id,
-                    dataset_name=job.get("dataset_name"),
-                    created_timestamp=job.get("created_timestamp"),
-                    clustering_algorithm=job.get("clustering_algorithm"),
-                    status=celery_status,
-                )
-            )
-        return job_list
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e
 
 
 @app.get("/result/{job_id}/table")
