@@ -24,6 +24,7 @@ RUN pip install git+https://github.com/wywongbd/autocluster.git@master && \
 RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
+COPY ./utils /app/utils
 
 ENV PYTHONPATH=/app
 

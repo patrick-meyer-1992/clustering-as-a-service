@@ -10,10 +10,11 @@ import streamlit as st
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
+from utils.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL
+from utils.logger import setup_logger
 
-FASTAPI_HOST = os.getenv("FASTAPI_HOST")
-FASTAPI_PORT = os.getenv("FASTAPI_PORT")
-FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
+logger = setup_logger(__name__)
+
 FASTAPI_URL = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}"
 
 if "dataset_name" not in st.session_state:

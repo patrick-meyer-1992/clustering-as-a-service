@@ -7,7 +7,6 @@ from typing import Any
 
 import pandas as pd
 import plotly.express as px
-import pytz
 import requests
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
@@ -15,13 +14,14 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFi
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
+from utils.config import TIMEZONE
+from utils.logger import setup_logger
 from workers.celery_conn import celery
-from workers.tasks import run_clustering_job
+from workers.worker_tasks import run_clustering_job
 
 app = FastAPI()
 
-# Define the timezone
-TIMEZONE = pytz.timezone("UTC")
+logger = setup_logger(__name__)
 
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
