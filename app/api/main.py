@@ -620,7 +620,7 @@ async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongo
 
 class AutoMlClusterRequest(BaseModel):
     dataset_name: str = Field(..., description="The name of the dataset")
-    columns: list[str] = Field(..., description="The columns to use for clustering")
+    columns: list[dict[str, str]] | None = Field(description="The columns to use for clustering", default=None)
     clustering_algorithms: list[str] | None = Field(
         default=None,
         description="List of clustering algorithms to use (e.g., KMeans, DBSCAN)",
@@ -641,7 +641,16 @@ class AutoMlClusterRequest(BaseModel):
             "examples": [
                 {
                     "dataset_name": "iris.csv",
-                    "columns": ["sepal.length", "sepal.width"],
+                    "columns": [
+                        {
+                            "name": "sepal.length",
+                            "type": "numeric",
+                        },
+                        {
+                            "name": "sepal.width",
+                            "type": "numeric",
+                        },
+                    ],
                     "clustering_algorithms": ["KMeans", "DBSCAN"],
                     "dim_reduction_algorithms": ["PCA"],
                     "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
@@ -667,13 +676,38 @@ class AutoMlClusterResponse(BaseModel):
 
 
 @app.post("/automl/job")
-async def start_automl(req: AutoMlClusterRequest) -> AutoMlClusterResponse:
+async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_mongodb)) -> AutoMlClusterResponse:
     print("[AutoML] Received new request on /automl/job")
+
+    data_collection = mongodb_database.get_collection("data")
+    # Check if the dataset exists
+    exists = await data_collection.find_one({"dataset_name": req.dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Fetch the specified fields from the dataset
+    dataset = await data_collection.find_one({"dataset_name": req.dataset_name}, {"_id": 0, "columns": 1})
+
+    # Check if requested columns exist for the dataset and their types are valid
+    for request_column in req.columns:
+        if request_column["name"] not in [col["name"] for col in dataset["columns"]]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' not found in dataset '{req.dataset_name}'",
+            )
+        allowed_types = [col["allowed_types"] for col in dataset["columns"] if col["name"] == request_column["name"]][0]
+
+        if request_column["type"] not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Column '{request_column['name']}' does not support type '{request_column['type']}'.",
+            )
 
     try:
         task_kwargs = {
             "dataset_name": req.dataset_name,
             "columns": req.columns,
+            "created_timestamp": datetime.now(TIMEZONE).isoformat(),
             "clustering_algorithms": req.clustering_algorithms,
             "dim_reduction_algorithms": req.dim_reduction_algorithms,
             "evaluator_ls": req.evaluator_ls,
