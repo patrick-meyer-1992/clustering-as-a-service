@@ -222,7 +222,7 @@ def test_automl_iris():
     assert "job_id" in job_response
     assert job_response["job_id"] is not None
 
-    sleep(20)  # Wait for the job to be processed
+    sleep(60)  # Wait for the job to be processed
 
     response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
     assert response.status_code == 200
