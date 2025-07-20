@@ -449,7 +449,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
         if job.get("name") == "automl_worker.run_autocluster":
             flower_job["clustering_algorithm"] = "AutoML"
             flower_job["dataset_name"] = ast.literal_eval(job.get("kwargs"))["dataset_name"]
-            flower_job["created_timestamp"] = "2025-07-18T18:07:18.273034+00:00"  # TODO: Replace dummy
+            flower_job["created_timestamp"] = ast.literal_eval(job.get("kwargs"))["created_timestamp"]
         else:
             args = ast.literal_eval(job.get("args"))
             flower_job["clustering_algorithm"] = args[-2]
