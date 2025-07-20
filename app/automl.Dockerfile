@@ -25,4 +25,6 @@ RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
 
-CMD ["celery", "-A", "workers.automl_worker", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
+ENV PYTHONPATH=/app
+
+CMD ["celery", "-A", "workers.automl_tasks", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
