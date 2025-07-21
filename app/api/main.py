@@ -1,3 +1,4 @@
+import ast
 import io
 import os
 from datetime import datetime
@@ -7,6 +8,7 @@ from typing import Any
 import pandas as pd
 import plotly.express as px
 import pytz
+import requests
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
@@ -46,6 +48,8 @@ ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
+
+FLOWER_URL = os.getenv("FLOWER_URL")
 
 
 async def get_mongodb():
@@ -543,11 +547,53 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
     Get an overview of all clustering jobs and their current status.
 
     Returns:
-    - **list[JobsGetResponse]**: List of jobs with metadata and Celery status
+        **list[JobsGetResponse]**: List of jobs with metadata and Celery status
 
     Raises:
-    - **HTTPException**: 500 for server errors
+        **HTTPException**: 500 for server errors
     """
+
+    results_collection = mongodb_database.get_collection("results")
+    mongodb_jobs = await results_collection.find(
+        {}, {"_id": 0, "job_id": 1, "dataset_name": 1, "created_timestamp": 1, "clustering_algorithm": 1}
+    ).to_list()
+
+    for job in mongodb_jobs:
+        job["status"] = "PERSISTED"
+    mongodb_job_ids = [job["job_id"] for job in mongodb_jobs]
+
+    response = requests.get(f"{FLOWER_URL}/api/tasks")
+
+    if response.status_code != 200:
+        print(f"Error fetching jobs from Flower: {response.text}")
+        raise HTTPException(status_code=500, detail="Error fetching jobs from Flower")
+
+    flower_jobs = list()
+    for job_id in response.json():
+        if job_id in mongodb_job_ids:
+            continue
+        job = response.json()[job_id]
+        flower_job = dict()
+        flower_job["job_id"] = job_id
+        flower_job["status"] = job.get("state")
+        if job.get("name") == "automl_worker.run_autocluster":
+            flower_job["clustering_algorithm"] = "AutoML"
+            flower_job["dataset_name"] = ast.literal_eval(job.get("kwargs"))["dataset_name"]
+            flower_job["created_timestamp"] = ast.literal_eval(job.get("kwargs"))["created_timestamp"]
+        else:
+            args = ast.literal_eval(job.get("args"))
+            flower_job["clustering_algorithm"] = args[-2]
+            flower_job["dataset_name"] = args[0]
+            flower_job["created_timestamp"] = args[-3]
+        flower_jobs.append(flower_job)
+
+    result = sorted(
+        flower_jobs + mongodb_jobs,
+        key=lambda job: job.get("created_timestamp"),
+        reverse=True,
+    )
+    return result
+
     try:
         results_collection = mongodb_database.get_collection("results")
         jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
@@ -923,39 +969,6 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
-
-
-@app.get("/debug/job/{job_id}")
-async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
-    """
-    Debug endpoint to inspect job status and stored results.
-
-    Args:
-    - **job_id**: ID of the job to debug
-
-    Returns:
-    - **dict**: Debug information including Celery task status and MongoDB storage status
-
-    Raises:
-    - **HTTPException**: 500 for debug errors
-
-    """
-    try:
-        # Check Celery task
-        task = celery.AsyncResult(job_id)
-        task_info = {
-            "job_id": task.id,
-            "status": task.status,
-            "result": task.result if task.ready() else None,
-        }
-
-        # Check MongoDB
-        results_collection = mongodb_database.get_collection("results")
-        stored_result = await results_collection.find_one({"job_id": job_id})
-
-        return {"task_info": task_info, "stored_result": stored_result is not None}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}") from e
 
 
 @app.get("/parameters/{algorithm_name}")
