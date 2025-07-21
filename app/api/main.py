@@ -22,7 +22,7 @@ app = FastAPI()
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
-MINIO_BUCKET_NAME = "caas-data"
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME")
 
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")

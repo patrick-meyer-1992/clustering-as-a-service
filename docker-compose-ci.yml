@@ -16,7 +16,8 @@ services:
       - MONGODB_PORT=27017
       - MINIO_URL=test-caas-minio:9000
       - MINIO_ACCESS_KEY=minio_admin
-      - MINIO_SECRET_KEY=minio_admin
+      - MINIO_SECRET_KEY=minio_admin      
+      - MINIO_BUCKET_NAME=caas-data
     depends_on:
       - mongodb
       - redis

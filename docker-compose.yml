@@ -18,6 +18,7 @@ services:
       - MINIO_URL=caas-minio:9000
       - MINIO_ACCESS_KEY=minio_admin
       - MINIO_SECRET_KEY=minio_admin
+      - MINIO_BUCKET_NAME=caas-data
 
   streamlit:
     container_name: caas-streamlit
