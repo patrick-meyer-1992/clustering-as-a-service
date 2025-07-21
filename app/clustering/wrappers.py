@@ -203,7 +203,6 @@ class BisectingKMeansWrapper(BaseClustering):
                 "labels": labels.tolist(),
                 "cluster_centers": model.cluster_centers_.tolist(),
                 "inertia": float(model.inertia_),
-                "n_iter": model.n_iter_.tolist(),
                 "cluster_sizes": dict(cluster_sizes),
             }
 
@@ -408,7 +407,9 @@ class OPTICSWrapper(BaseClustering):
 
     @staticmethod
     def get_default_params():
-        return OPTICS().get_params()
+        params = OPTICS().get_params()
+        params["max_eps"] = 10
+        return params
 
     @staticmethod
     def get_sklearn_estimator_class():

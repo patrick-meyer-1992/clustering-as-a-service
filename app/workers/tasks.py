@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pandas as pd
 import pytz
 from clustering import wrappers
 
@@ -44,8 +43,7 @@ def run_clustering_job(
         data = clustering.load_data()
 
         # Encoding nominal or ordinal columns
-        df = pd.DataFrame(data)
-        df = clustering.encode_data(df)
+        df = clustering.encode_data(data)
         data = df.to_numpy()
 
         data = clustering.prepare_data(data, preprocess)

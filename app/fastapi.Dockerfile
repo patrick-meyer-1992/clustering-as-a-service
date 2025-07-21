@@ -10,4 +10,4 @@ COPY ./clustering /app/clustering
 COPY ./workers/ /app/workers
 COPY ./api /app/api
 
-CMD ["fastapi", "run", "main.py", "--port", "8000"]
+CMD ["fastapi", "run", "/app/api/main.py", "--port", "8000"]
