@@ -15,6 +15,7 @@ services:
       - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
+      - FLOWER_URL=http://caas-flower:5555
 
   streamlit:
     container_name: caas-streamlit
@@ -43,10 +44,10 @@ services:
     volumes:
       - rabbitmq-lib:/var/lib/rabbitmq
       - rabbitmq-log:/var/log/rabbitmq
-      # - type: bind
-      #   source: ./message_broker/.erlang.cookie
-      #   target: /var/lib/rabbitmq/.erlang.cookie
-      #   read_only: true
+    # - type: bind
+    #   source: ./message_broker/.erlang.cookie
+    #   target: /var/lib/rabbitmq/.erlang.cookie
+    #   read_only: true
     user: rabbitmq
     healthcheck:
       test: rabbitmq-diagnostics ping
@@ -85,6 +86,23 @@ services:
     container_name: caas-redis
     ports:
       - '6379:6379'
+
+  flower:
+    container_name: caas-flower
+    build:
+      context: ./app
+      dockerfile: clustering_worker.Dockerfile
+    command: celery -A workers.tasks flower --port=5555
+    env_file:
+      - ./message_broker/.env
+      - ./redis/.env
+      - ./app/api/.env
+    environment:
+      - FLOWER_UNAUTHENTICATED_API=true
+    ports:
+      - "5555:5555"
+    depends_on:
+      - rabbitmq
 
   automl-worker:
     container_name: caas-automl_worker

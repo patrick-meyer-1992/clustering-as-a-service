@@ -3,3 +3,4 @@ pandas
 requests
 celery[redis,rabbitmq]
 pydantic
+flower
