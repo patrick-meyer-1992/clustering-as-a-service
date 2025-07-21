@@ -8,3 +8,4 @@ postgresql/data
 .pytest_cache
 .ruff_cache
 *secret.yamlapp/log/
+app/log/
