@@ -11,6 +11,8 @@ from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from minio import Minio
+from minio.error import S3Error
 from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
 from workers.celery_conn import celery
@@ -20,6 +22,7 @@ app = FastAPI()
 
 # Define the timezone
 TIMEZONE = pytz.timezone("UTC")
+MINIO_BUCKET_NAME = "caas-data"
 
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
@@ -27,19 +30,24 @@ ALGORITHM_MAP = {
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
 
 
+async def get_minio_client():
+    MINIO_URL = os.getenv("MINIO_URL")
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+    MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+    client = Minio(MINIO_URL, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+    # Ensure the bucket exists
+    if not client.bucket_exists(MINIO_BUCKET_NAME):
+        client.make_bucket(MINIO_BUCKET_NAME)
+    yield client
+
+
 async def get_mongodb():
     MONGODB_DB = os.getenv("MONGODB_DB")
     MONGODB_HOST = os.getenv("MONGODB_HOST")
     MONGODB_PORT = os.getenv("MONGODB_PORT")
 
-    # For testing purposes, you can set MONGODB_URL in your environment variables
-    MONGODB_URL = os.getenv("MONGODB_URL", None)
-
-    if MONGODB_URL:
-        mongodb_client = AsyncMongoClient(MONGODB_URL)
-        print(f"Using MongoDB URL: {MONGODB_URL}")
-    else:
-        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
+    mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
     try:
@@ -105,18 +113,16 @@ async def get_metadata(
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(
     dataset_name: str,
-    mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ):
-    # Hole den Datensatz aus MongoDB
-    data_collection = mongodb_database.get_collection("data")
-    dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
-    print(f"Retrieved dataset: {dataset_name}")
-
-    if not dataset:
+    """Fetch a dataset from MinIO and return it as a streaming response."""
+    # Fetch the dataset from MinIO
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, dataset_name)
+    except S3Error:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Erstelle einen StreamingResponse für die CSV-Daten
-    file_stream = io.StringIO(dataset["data"])
+    file_stream = io.StringIO(dataset.read().decode("utf-8"))
     return StreamingResponse(
         file_stream,
         media_type="text/csv",
@@ -163,6 +169,7 @@ class DatasetPutResponse(BaseModel):
 async def put_dataset(
     file: UploadFile = File(description="The CSV file to upload", default=...),
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ):
     type_mapping = {
         "float64": ["numeric", "nominal", "ordinal"],
@@ -181,36 +188,49 @@ async def put_dataset(
     exists = await data_collection.find_one({"dataset_name": file.filename})
     if exists:
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
+
+    content = await file.read()
+
+    # Parse the CSV file to extract column names
     try:
-        content = await file.read()
-
-        # Parse the CSV file to extract column names
-        try:
-            df = pd.read_csv(io.BytesIO(content))
-            columns = [
-                {"name": col, "allowed_types": type_mapping.get(str(dtype))}
-                for col, dtype in df.dtypes.items()
-                if type_mapping[str(dtype)] is not None
-            ]
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
-
+        df = pd.read_csv(io.BytesIO(content))
+        columns = [
+            {"name": col, "allowed_types": type_mapping.get(str(dtype))}
+            for col, dtype in df.dtypes.items()
+            if type_mapping[str(dtype)] is not None
+        ]
         # Convert to Numpy array and validate
         validate_data(df.to_numpy())
-
-        # Store the dataset and metadata in MongoDB
-        await data_collection.insert_one(
-            {
-                "dataset_name": file.filename,
-                "content_type": file.content_type,
-                "size": len(content),
-                "columns": columns,
-                "data": content.decode("utf-8"),  # Store the CSV content as a string
-            }
-        )
-        return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+        raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
+
+    # Store the dataset and metadata in MongoDB
+    await data_collection.insert_one(
+        {
+            "dataset_name": file.filename,
+            "content_type": file.content_type,
+            "size": len(content),
+            "columns": columns,
+        }
+    )
+
+    # If minio fails remove the dataset from MongoDB
+    try:
+        minio_client.put_object(
+            bucket_name=MINIO_BUCKET_NAME,
+            object_name=file.filename,
+            data=io.BytesIO(content),
+            length=len(content),
+            content_type=file.content_type,
+        )
+    except Exception as e:
+        await data_collection.delete_one({"dataset_name": file.filename})
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file to MinIO and therefore removed dataset from mongodb again: {e}",
+        ) from e
+
+    return {"dataset_name": file.filename, "columns": columns}
 
 
 class DatasetDeleteResponse(BaseModel):
@@ -235,16 +255,25 @@ class DatasetDeleteResponse(BaseModel):
 async def delete_dataset(
     dataset_name: str,
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> DatasetDeleteResponse:
     """
-    Delete a dataset from mongoDB and all results associated with it.
+    Delete a dataset from mongoDB and MinIO and all results associated with it.
     """
+
+    # Delete the dataset from mongoDB
     data_collection = mongodb_database.get_collection("data")
     result_collection = mongodb_database.get_collection("results")
     # Get all job IDs associated with the dataset
     jobs = await result_collection.find({"dataset_name": dataset_name}, {"_id": 0, "job_id": 1}).to_list(length=None)
     await result_collection.delete_many({"dataset_name": dataset_name})
     result = await data_collection.delete_one({"dataset_name": dataset_name})
+
+    # Delete the dataset from MinIO
+    try:
+        minio_client.remove_object(MINIO_BUCKET_NAME, dataset_name)
+    except S3Error as e:
+        print(f"Error deleting object from MinIO. It still got deleted from mongoDB: {e}")
 
     if result.deleted_count == 1:
         return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
