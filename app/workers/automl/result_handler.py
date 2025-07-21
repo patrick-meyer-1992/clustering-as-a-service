@@ -5,7 +5,7 @@ import numpy as np
 import requests
 from sklearn.utils.validation import check_is_fitted
 
-from workers.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL, TIMEZONE
+from utils.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL, TIMEZONE
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def send_results_to_backend(
             return {}
 
     try:
-        predictions = cluster.predict(df)
+        predictions = cluster.predict(df, save_plot=False)
         clustering_model = result_dict["clustering_model"]
         finished_timestamp = datetime.now(TIMEZONE).isoformat()
 

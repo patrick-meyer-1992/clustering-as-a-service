@@ -4,7 +4,7 @@ from clustering import wrappers
 from utils.config import TIMEZONE
 from utils.logger import setup_logger
 
-from .celery_conn import celery
+from workers.celery_conn import celery
 
 logger = setup_logger(__name__)
 

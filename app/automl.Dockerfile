@@ -30,4 +30,4 @@ COPY ./utils /app/utils
 
 ENV PYTHONPATH=/app
 
-CMD ["celery", "-A", "workers.automl_tasks", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
+CMD ["celery", "-A", "workers.automl.automl_tasks", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]

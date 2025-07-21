@@ -56,9 +56,6 @@ def run_autocluster(
         logger.info(f"[AutoML][{job_id}] Starting subprocess: {' '.join(args)}")
         subprocess.run(args, env=env)
 
-        # result = subprocess.run(args, check=True, env=env, stdout=subprocess.PIPE,
-        # stderr=subprocess.STDOUT, text=True)
-
         logger.debug(f"[AutoML][{job_id}] Passed task to subprocess")
 
         return {"status": "submitted", "job_id": job_id}

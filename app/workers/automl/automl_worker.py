@@ -10,9 +10,9 @@ from autocluster import AutoCluster
 from utils.config import TIMEZONE
 from utils.logger import setup_logger
 
-from workers.data_loader import fetch_dataset
-from workers.fit_config import prepare_fit_params
-from workers.result_handler import send_results_to_backend
+from workers.automl.data_loader import fetch_dataset
+from workers.automl.fit_config import prepare_fit_params
+from workers.automl.result_handler import send_results_to_backend
 
 logger = setup_logger(__name__)
 

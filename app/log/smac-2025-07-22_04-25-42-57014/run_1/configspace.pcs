@@ -1,0 +1,75 @@
+clustering_choice categorical {KMeans, GaussianMixture, Birch, MiniBatchKMeans, AgglomerativeClustering, SpectralClustering} [KMeans]
+dim_reduction_choice categorical {TSNE, PCA, IncrementalPCA, KernelPCA, FastICA, TruncatedSVD} [TSNE]
+affinity___AgglomerativeClustering categorical {euclidean, cityblock, l2, l1, manhattan, cosine} [euclidean]
+affinity___SpectralClustering categorical {nearest_neighbors, poly, sigmoid, laplacian, rbf} [rbf]
+algorithm___FastICA categorical {parallel, deflation} [parallel]
+algorithm___TruncatedSVD categorical {arpack, randomized} [randomized]
+assign_labels___SpectralClustering categorical {kmeans, discretize} [kmeans]
+batch_size___IncrementalPCA integer [10, 1000] [100]
+batch_size___MiniBatchKMeans integer [10, 1000] [100]
+branching_factor___Birch integer [10, 1000] [50]
+covariance_type___GaussianMixture categorical {full, tied, diag, spherical} [full]
+early_exaggeration___TSNE real [5.0, 20.0] [12.0]
+eigen_solver___SpectralClustering categorical {arpack} [arpack]
+fun___FastICA categorical {logcosh, exp, cube} [logcosh]
+init_params___GaussianMixture categorical {kmeans, random} [kmeans]
+kernel___KernelPCA categorical {linear, poly, rbf, sigmoid, cosine} [linear]
+linkage___AgglomerativeClustering categorical {ward, complete, average, single} [complete]
+n_clusters___AgglomerativeClustering integer [1, 80] [10]
+n_clusters___Birch integer [1, 80] [5]
+n_clusters___KMeans integer [1, 80] [5]
+n_clusters___MiniBatchKMeans integer [1, 80] [10]
+n_clusters___SpectralClustering integer [1, 80] [10]
+n_components___FastICA ordinal {2, 3} [2]
+n_components___GaussianMixture integer [1, 80] [5]
+n_components___IncrementalPCA ordinal {2, 3} [2]
+n_components___KernelPCA ordinal {2, 3, 4, 5, 6, 7, 8, 9} [2]
+n_components___PCA ordinal {2, 3} [2]
+n_components___TSNE ordinal {2} [2]
+n_components___TruncatedSVD ordinal {2, 3, 4, 5, 6, 7, 8, 9} [2]
+perplexity___TSNE real [1.0, 300.0] [30.0]
+svd_solver___PCA categorical {auto, full, arpack, randomized} [auto]
+warm_start___GaussianMixture categorical {True, False} [False]
+whiten___FastICA categorical {True, False} [True]
+whiten___IncrementalPCA categorical {True, False} [False]
+whiten___PCA categorical {True, False} [False]
+
+affinity___AgglomerativeClustering | clustering_choice in {AgglomerativeClustering}
+affinity___SpectralClustering | clustering_choice in {SpectralClustering}
+assign_labels___SpectralClustering | clustering_choice in {SpectralClustering}
+batch_size___MiniBatchKMeans | clustering_choice in {MiniBatchKMeans}
+branching_factor___Birch | clustering_choice in {Birch}
+covariance_type___GaussianMixture | clustering_choice in {GaussianMixture}
+eigen_solver___SpectralClustering | clustering_choice in {SpectralClustering}
+init_params___GaussianMixture | clustering_choice in {GaussianMixture}
+linkage___AgglomerativeClustering | clustering_choice in {AgglomerativeClustering}
+n_clusters___AgglomerativeClustering | clustering_choice in {AgglomerativeClustering}
+n_clusters___Birch | clustering_choice in {Birch}
+n_clusters___KMeans | clustering_choice in {KMeans}
+n_clusters___MiniBatchKMeans | clustering_choice in {MiniBatchKMeans}
+n_clusters___SpectralClustering | clustering_choice in {SpectralClustering}
+n_components___GaussianMixture | clustering_choice in {GaussianMixture}
+warm_start___GaussianMixture | clustering_choice in {GaussianMixture}
+algorithm___FastICA | dim_reduction_choice in {FastICA}
+algorithm___TruncatedSVD | dim_reduction_choice in {TruncatedSVD}
+batch_size___IncrementalPCA | dim_reduction_choice in {IncrementalPCA}
+early_exaggeration___TSNE | dim_reduction_choice in {TSNE}
+fun___FastICA | dim_reduction_choice in {FastICA}
+kernel___KernelPCA | dim_reduction_choice in {KernelPCA}
+n_components___FastICA | dim_reduction_choice in {FastICA}
+n_components___IncrementalPCA | dim_reduction_choice in {IncrementalPCA}
+n_components___KernelPCA | dim_reduction_choice in {KernelPCA}
+n_components___PCA | dim_reduction_choice in {PCA}
+n_components___TSNE | dim_reduction_choice in {TSNE}
+n_components___TruncatedSVD | dim_reduction_choice in {TruncatedSVD}
+perplexity___TSNE | dim_reduction_choice in {TSNE}
+svd_solver___PCA | dim_reduction_choice in {PCA}
+whiten___FastICA | dim_reduction_choice in {FastICA}
+whiten___IncrementalPCA | dim_reduction_choice in {IncrementalPCA}
+whiten___PCA | dim_reduction_choice in {PCA}
+
+{affinity___AgglomerativeClustering=cityblock, linkage___AgglomerativeClustering=ward}
+{affinity___AgglomerativeClustering=cosine, linkage___AgglomerativeClustering=ward}
+{affinity___AgglomerativeClustering=l1, linkage___AgglomerativeClustering=ward}
+{affinity___AgglomerativeClustering=l2, linkage___AgglomerativeClustering=ward}
+{affinity___AgglomerativeClustering=manhattan, linkage___AgglomerativeClustering=ward}

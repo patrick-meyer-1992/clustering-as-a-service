@@ -10,4 +10,4 @@ COPY ./clustering /app/clustering
 COPY ./workers/ /app/workers
 COPY ./utils /app/utils
 
-CMD ["celery", "-A", "workers.worker_tasks", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "workers.clustering.worker_tasks", "worker", "--loglevel=info"]

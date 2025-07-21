@@ -17,7 +17,7 @@ from pymongo import AsyncMongoClient
 from utils.config import TIMEZONE
 from utils.logger import setup_logger
 from workers.celery_conn import celery
-from workers.worker_tasks import run_clustering_job
+from workers.clustering.worker_tasks import run_clustering_job
 
 app = FastAPI()
 

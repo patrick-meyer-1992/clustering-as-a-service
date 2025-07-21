@@ -1,7 +1,7 @@
 from autocluster import MetafeatureMapper, get_evaluator
 from utils.logger import setup_logger
 
-from workers.preprocessing import build_preprocess_dict
+from workers.automl.preprocessing import build_preprocess_dict
 
 logger = setup_logger(__name__)
 
