@@ -1,4 +1,5 @@
 import os
+
 import pytz
 
 FASTAPI_HOST = os.getenv("FASTAPI_HOST", "caas-fastapi")

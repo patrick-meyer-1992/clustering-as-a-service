@@ -1,7 +1,7 @@
-import logging
-from workers.logger import setup_logger
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
+
 
 def build_preprocess_dict(columns_list):
     """
@@ -42,7 +42,7 @@ def build_preprocess_dict(columns_list):
         "numeric_cols": numeric_cols,
         "categorical_cols": categorical_cols,
         "ordinal_cols": ordinal_cols,
-        "y_col": []  # No label column in unsupervised clustering
+        "y_col": [],  # No label column in unsupervised clustering
     }
 
     logger.debug(f"[Preprocessing] Built preprocess_dict: {preprocess_dict}")

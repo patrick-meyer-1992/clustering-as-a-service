@@ -1,9 +1,9 @@
-import requests
 import io
-import pandas as pd
 
-from workers.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL
-from workers.logger import setup_logger
+import pandas as pd
+import requests
+from utils.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -25,7 +25,8 @@ def fetch_dataset(job_id, dataset_name, columns):
         logger.exception(f"[AutoML][{job_id}] Fetch dataset failed: {e}")
         raise
 
-    logger.info("[AutoML][%s] Dataset successfully filtered to columns %s, " \
-                "final shape: %s", job_id, column_names, df.shape)
+    logger.info(
+        "[AutoML][%s] Dataset successfully filtered to columns %s, final shape: %s", job_id, column_names, df.shape
+    )
 
     return df
