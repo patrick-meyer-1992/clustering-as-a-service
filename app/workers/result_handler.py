@@ -49,7 +49,7 @@ def send_results_to_backend(
             "created_timestamp": created_timestamp,
             "started_timestamp": started_timestamp,
             "finished_timestamp": finished_timestamp,
-            "clustering_algorithm": getattr(clustering_model, "__class__", type("Unknown", (), {})).__name__.lower(),
+            "clustering_algorithm": "AutoML",
             "clustering_params": extract_params_from_model(clustering_model),
             "preprocessing_params": {"scaler": "standard"},
             "labels": predictions.tolist() if isinstance(predictions, np.ndarray) else list(predictions),

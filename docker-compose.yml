@@ -91,6 +91,8 @@ services:
     build:
       context: ./app
       dockerfile: automl.Dockerfile
+    volumes:
+      - ./app:/app
     env_file:
       - ./message_broker/.env
       - ./redis/.env

@@ -18,6 +18,8 @@ COPY ./automl-requirements.txt /app/automl-requirements.txt
 RUN grep -v '^autocluster' /app/automl-requirements.txt > /tmp/requirements.txt && \
     pip install --no-cache-dir --upgrade -r /tmp/requirements.txt
 
+RUN pip install pytest pytest-cov
+
 RUN pip install git+https://github.com/wywongbd/autocluster.git@master && \
     pip show autocluster
 
