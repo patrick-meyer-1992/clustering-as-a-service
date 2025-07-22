@@ -18,6 +18,7 @@ services:
       - MINIO_ACCESS_KEY=minio_admin
       - MINIO_SECRET_KEY=minio_admin      
       - MINIO_BUCKET_NAME=caas-data
+      - FLOWER_URL=http://test-caas-flower:5555
     depends_on:
       - mongodb
       - redis
@@ -47,7 +48,6 @@ services:
       - FASTAPI_HOST=test-caas-fastapi
       - FASTAPI_PORT=8000
       - FASTAPI_PROTOCOL=http
-
     depends_on:
       - rabbitmq
 
@@ -75,6 +75,24 @@ services:
     image: redis
     restart: unless-stopped
     container_name: test-caas-redis
+
+  flower:
+    container_name: test-caas-flower
+    build:
+      context: ./app
+      dockerfile: clustering_worker.Dockerfile
+    command: celery -A "workers.clustering.worker_tasks" flower --port=5555
+    environment:
+      - RABBITMQ_HOST=test-caas-rabbitmq
+      - RABBITMQ_PORT=5672
+      - REDIS_HOST=test-caas-redis
+      - REDIS_PORT=6379
+      - FASTAPI_HOST=test-caas-fastapi
+      - FASTAPI_PORT=8000
+      - FASTAPI_PROTOCOL=http
+      - FLOWER_UNAUTHENTICATED_API=true
+    depends_on:
+      - rabbitmq
 
   automl-worker:
     container_name: test-caas-automl_worker

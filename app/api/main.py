@@ -1,4 +1,6 @@
+import ast
 import io
+import json
 import os
 from datetime import datetime
 from enum import Enum
@@ -6,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 import plotly.express as px
-import pytz
+import requests
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
@@ -15,14 +17,38 @@ from minio import Minio
 from minio.error import S3Error
 from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
+from utils.config import TIMEZONE
+from utils.logger import setup_logger
 from workers.celery_conn import celery
-from workers.tasks import run_clustering_job
+from workers.clustering.worker_tasks import run_clustering_job
 
-app = FastAPI()
+description = """
+Clustering as a Service API
 
-# Define the timezone
-TIMEZONE = pytz.timezone("UTC")
+This module provides a FastAPI application for clustering data as a service.
+It includes endpoints for dataset management, clustering job submission,
+result retrieval, and AutoML clustering capabilities.
+
+The API supports:
+- Dataset upload, retrieval, and deletion
+- Multiple clustering algorithms
+- Preprocessing and parameter configuration
+- Job status monitoring
+- Result visualization
+- AutoML clustering optimization
+"""
+
 MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME")
+FLOWER_URL = os.getenv("FLOWER_URL")
+
+app = FastAPI(
+    title="Clustering as a Service API",
+    description=description,
+    summary="A RESTful-API which allows clustering of datasets and retrieval of results.",
+    version="1.0.0",
+)
+
+logger = setup_logger(__name__)
 
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
@@ -43,6 +69,20 @@ async def get_minio_client():
 
 
 async def get_mongodb():
+    """
+    Create and manage MongoDB database connection.
+
+    Yields:
+        AsyncIOMotorDatabase: MongoDB database instance
+
+    Note:
+        Uses environment variables for connection configuration:
+        - MONGODB_URL: Full connection string (optional)
+        - MONGODB_HOST: MongoDB host
+        - MONGODB_PORT: MongoDB port
+        - MONGODB_DB: Database name
+    """
+
     MONGODB_DB = os.getenv("MONGODB_DB")
     MONGODB_HOST = os.getenv("MONGODB_HOST")
     MONGODB_PORT = os.getenv("MONGODB_PORT")
@@ -57,6 +97,16 @@ async def get_mongodb():
 
 
 def validate_data(data):
+    """
+    Validate input data for clustering operations.
+
+    Args:
+    - data: Input data array to validate
+
+    Raises:
+    - ValueError: If data is None, empty, or not 2-dimensional
+    - TypeError: If data doesn't have shape attribute
+    """
     # Check for None
     if data is None:
         raise ValueError("Input data is None.")
@@ -72,10 +122,6 @@ def validate_data(data):
     # Check 2D shape
     if len(data.shape) != 2:
         raise ValueError("Input data must be 2-dimensional (samples, features).")
-
-    # Check if numeric
-    # if not np.issubdtype(data.dtype, np.number):
-    #    raise TypeError("Input data must be numeric.")
 
 
 class DatasetField(str, Enum):
@@ -95,7 +141,21 @@ async def get_metadata(
         description="Fields to return from the dataset metadata. Default is 'columns'.",
     ),
     mongodb_database=Depends(get_mongodb),
-):
+) -> dict[str, Any]:
+    """
+    Retrieve metadata for a specific dataset.
+
+    Args:
+    - **dataset_name**: Name of the dataset to get metadata for
+    - **fields**: List of metadata fields to return (default: columns only)
+
+    Returns:
+    - **dict**: Dataset metadata containing requested fields
+
+    Raises:
+    - **HTTPException**: 404 if dataset not found, 500 for server errors
+    """
+
     data_collection = mongodb_database.get_collection("data")
     # Check if the dataset exists
     exists = await data_collection.find_one({"dataset_name": dataset_name})
@@ -115,7 +175,19 @@ async def get_dataset(
     dataset_name: str,
     minio_client=Depends(get_minio_client),
 ):
-    """Fetch a dataset from MinIO and return it as a streaming response."""
+    """
+    Download a dataset as a CSV file.
+
+    Args:
+    - **dataset_name**: Name of the dataset to download
+
+    Returns:
+    - **StreamingResponse**: CSV file stream with appropriate headers
+
+    Raises:
+    - **HTTPException**: 404 if dataset not found, 500 for server errors
+    """
+
     # Fetch the dataset from MinIO
     try:
         dataset = minio_client.get_object(MINIO_BUCKET_NAME, dataset_name)
@@ -171,6 +243,22 @@ async def put_dataset(
     mongodb_database=Depends(get_mongodb),
     minio_client=Depends(get_minio_client),
 ):
+    """
+    Upload a new dataset from a CSV file.
+
+    Args:
+    - **file**: CSV file to upload
+
+    Returns:
+    - **DatasetPutResponse**: Dataset name and column information
+
+    Raises:
+    - **HTTPException**:
+        - 400 for invalid CSV files
+        - 409 if dataset name already exists
+        - 500 for server errors
+    """
+
     type_mapping = {
         "float64": ["numeric", "nominal", "ordinal"],
         "float32": ["numeric", "nominal", "ordinal"],
@@ -258,7 +346,7 @@ async def delete_dataset(
     minio_client=Depends(get_minio_client),
 ) -> DatasetDeleteResponse:
     """
-    Delete a dataset from mongoDB and MinIO and all results associated with it.
+    Delete a dataset from mongoDB and all results associated with it.
     """
 
     # Delete the dataset from mongoDB
@@ -291,8 +379,12 @@ async def get_datasets(
     mongodb_database=Depends(get_mongodb),
 ) -> list[DatasetGetResponse]:
     """
-    Returns a list of all uploaded datasets.
+    Get a list of all uploaded datasets.
+
+    Returns:
+    - **list[DatasetGetResponse]**: List of dataset names
     """
+
     data_collection = mongodb_database.get_collection("data")
     datasets = await data_collection.find({}, {"_id": 0, "dataset_name": 1}).to_list(length=1000)
     return [DatasetGetResponse(**dataset) for dataset in datasets]
@@ -348,6 +440,24 @@ class JobPostResponse(BaseModel):
 
 
 def parse_params(params: dict[str, Any]) -> dict[str, Any]:
+    """
+    Parse string parameters and convert them to appropriate types.
+
+    Converts string representations to:
+    - int: for digit-only strings
+    - float: for decimal numbers, "inf", "-inf"
+    - bool: for "true"/"false" strings
+    - None: for "none" string
+
+    Args:
+    - **params**: Dictionary of parameters to parse
+
+    Returns:
+    - **dict[str, Any]**: Dictionary with converted parameter values
+
+    Note:
+    - Non-string values are left unchanged. Case-insensitive conversion for boolean and special values.
+    """
     for key, value in params.items():
         if not isinstance(value, str):
             continue
@@ -369,6 +479,21 @@ async def post_job(
     req: JobPostRequest,
     mongodb_database=Depends(get_mongodb),
 ) -> JobPostResponse:
+    """
+    Submit a new clustering job.
+
+    Args:
+    - **req**: Job request containing dataset name, columns, algorithm, and parameters
+
+    Returns:
+    - **JobPostResponse**: Job ID for tracking the clustering task
+
+    Raises:
+    - **HTTPException**:
+        - 404 if dataset not found
+        - 400 if columns are invalid or unsupported types
+        - 500 for server errors
+    """
     if req.clustering_params is None:
         req.clustering_params = {}
     clustering_params = parse_params(req.clustering_params)
@@ -439,53 +564,87 @@ class JobsGetResponse(BaseModel):
 @app.get("/jobs/")
 async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetResponse]:
     """
-    Returns an overview of all known jobs including their status.
+    Returns an overview of all clustering jobs and their current status.
+
+    Returns:
+        **list[JobsGetResponse]**: List of jobs with metadata and Celery status
+
+    Raises:
+        **HTTPException**: 500 for server errors
     """
-    try:
-        results_collection = mongodb_database.get_collection("results")
-        jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
-        job_list = []
-        for job in jobs:
-            job_id = job.get("job_id")
-            celery_status = None
-            if job_id:
-                task = celery.AsyncResult(job_id)
-                celery_status = task.status
-            job_list.append(
-                JobsGetResponse(
-                    job_id=job_id,
-                    dataset_name=job.get("dataset_name"),
-                    created_timestamp=job.get("created_timestamp"),
-                    clustering_algorithm=job.get("clustering_algorithm"),
-                    status=celery_status,
-                )
-            )
-        return job_list
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e
+
+    results_collection = mongodb_database.get_collection("results")
+    mongodb_jobs = await results_collection.find(
+        {}, {"_id": 0, "job_id": 1, "dataset_name": 1, "created_timestamp": 1, "clustering_algorithm": 1}
+    ).to_list()
+
+    for job in mongodb_jobs:
+        job["status"] = "PERSISTED"
+    mongodb_job_ids = [job["job_id"] for job in mongodb_jobs]
+
+    response = requests.get(f"{FLOWER_URL}/api/tasks")
+
+    if response.status_code != 200:
+        print(f"Error fetching jobs from Flower: {response.text}")
+        raise HTTPException(status_code=500, detail="Error fetching jobs from Flower")
+
+    flower_jobs = list()
+    for job_id in response.json():
+        if job_id in mongodb_job_ids:
+            continue
+        job = response.json()[job_id]
+        flower_job = dict()
+        flower_job["job_id"] = job_id
+        flower_job["status"] = job.get("state")
+        if job.get("name") == "automl_worker.run_autocluster":
+            flower_job["clustering_algorithm"] = "AutoML"
+            flower_job["dataset_name"] = ast.literal_eval(job.get("kwargs"))["dataset_name"]
+            flower_job["created_timestamp"] = ast.literal_eval(job.get("kwargs"))["created_timestamp"]
+        else:
+            args = ast.literal_eval(job.get("args"))
+            flower_job["clustering_algorithm"] = args[-2]
+            flower_job["dataset_name"] = args[0]
+            flower_job["created_timestamp"] = args[-3]
+        flower_jobs.append(flower_job)
+
+    result = sorted(
+        flower_jobs + mongodb_jobs,
+        key=lambda job: job.get("created_timestamp"),
+        reverse=True,
+    )
+    return result
 
 
 @app.get("/result/{job_id}/table")
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
-) -> dict[Any, Any]:
-    try:
-        result_collection = mongodb_database.get_collection("results")
-        data_collection = mongodb_database.get_collection("data")
-        result = await result_collection.find_one({"job_id": job_id})
+) -> dict[str, Any]:
+    """
+    Get clustering results as a table with original data and cluster labels.
 
-        if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+    Args:
+    - **job_id**: ID of the clustering job
 
-        dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-        df = pd.read_csv(io.StringIO(dataset["data"]))
-        df["labels"] = result.get("labels", [])
+    Returns:
+    - **dict[str, Any]**: Dictionary representation of DataFrame with labels column
 
-        return df.to_dict(orient="dict")
+    Raises:
+    - **HTTPException**: 404 if result not found, 500 for server errors
+    """
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    result_collection = mongodb_database.get_collection("results")
+    data_collection = mongodb_database.get_collection("data")
+    result = await result_collection.find_one({"job_id": job_id})
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+
+    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
+    df = pd.read_csv(io.StringIO(dataset["data"]))
+    df["labels"] = result.get("labels", [])
+
+    return df.to_dict(orient="dict")
 
 
 class ResultField(str, Enum):
@@ -511,6 +670,19 @@ async def get_result_raw(
     ),
     mongodb_database=Depends(get_mongodb),
 ) -> Any:
+    """
+    Get raw clustering result data for a specific field.
+
+    Args:
+    - **job_id**: ID of the clustering job
+    - **field**: Specific result field to return (default: labels)
+
+    Returns:
+    - **Any**: Raw result data for the requested field
+
+    Raises:
+    - **HTTPException**: 404 if result not found, 500 for server errors
+    """
     result_collection = mongodb_database.get_collection("results")
     result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
     if not result:
@@ -532,47 +704,67 @@ async def get_result_graph(
     mongodb_database=Depends(get_mongodb),
 ) -> dict[str, Any]:
     """
-    Creates a 2D plotly scatter plot for the clustering result of a job.
+    Generate a 2D scatter plot visualization of clustering results.
 
-    If x_column or y_column are not provided, the first two columns of the result will be used.
+    Args:
+    - **job_id**: ID of the clustering job
+    - **x_column**: Column name for x-axis (optional, defaults to first result column)
+    - **y_column**: Column name for y-axis (optional, defaults to second result column)
+
+    Returns:
+    - **dict[str, Any]**: Plotly figure dictionary for rendering
+
+    Raises:
+    - **HTTPException**:
+        - 404 if result not found
+        - 400 if data is invalid, columns don't exist, or data isn't 2D
+        - 500 for server errors
+
+    Note:
+    - If either x_column or y_column are not provided, uses the first two columns
+    from the clustering result. Legend items are sorted for consistency.
     """
-    try:
-        result_collection = mongodb_database.get_collection("results")
-        data_collection = mongodb_database.get_collection("data")
 
-        result = await result_collection.find_one({"job_id": job_id})
-        if not result:
-            raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
+    result_collection = mongodb_database.get_collection("results")
+    data_collection = mongodb_database.get_collection("data")
 
-        dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-        df = pd.read_csv(io.StringIO(dataset["data"]))
-        labels = [str(label) for label in result.get("labels")]
-        if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
-            raise HTTPException(status_code=400, detail="No data for plotting")
+    result = await result_collection.find_one({"job_id": job_id})
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
 
-        if x_column is None or y_column is None:
-            x_column = result.get("columns")[0]
-            y_column = result.get("columns")[1]
-        elif x_column not in df.columns or y_column not in df.columns:
-            raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
+    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
+    df = pd.read_csv(io.StringIO(dataset["data"]))
+    labels = [str(label) for label in result.get("labels")]
 
-        df = df[[x_column, y_column]]
+    if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
+        raise HTTPException(status_code=400, detail="No data for plotting")
 
-        if df.shape[1] != 2:
-            raise HTTPException(status_code=400, detail="Data is not 2D")
-        # Ensure legend items appear in a certain order by specifying category_orders
-        unique_labels = sorted(set(labels))
-        fig = px.scatter(
-            x=df[x_column],
-            y=df[y_column],
-            color=labels,
-            title=f"Clustering: {result.get('clustering_algorithm')}",
-            labels={"x": x_column, "y": y_column},
-            category_orders={"color": unique_labels},
-        )
-        return fig.to_dict()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+    if x_column is None or y_column is None:
+        x_column = result.get("columns")[0]
+        y_column = result.get("columns")[1]
+    elif x_column not in df.columns or y_column not in df.columns:
+        raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
+
+    df = df[[x_column, y_column]]
+    if df.shape[1] != 2:
+        raise HTTPException(status_code=400, detail="Exactly two columns must be selected.")
+
+    # Ensure legend items appear in a certain order by specifying category_orders
+    df["labels"] = labels
+    df["labels"] = df["labels"].astype(int)
+    df.sort_values(by=["labels"], inplace=True)
+    df["labels"] = df["labels"].astype(str)
+
+    fig = px.scatter(
+        df,
+        x=x_column,
+        y=y_column,
+        color="labels",
+        title=f"Clustering: {result.get('clustering_algorithm')}",
+        labels={"x": x_column, "y": y_column, "labels": "Cluster"},
+    )
+
+    return json.loads(json.dumps(fig.to_dict(), default=lambda x: x.tolist() if hasattr(x, "tolist") else str(x)))
 
 
 class ResultPostRequest(BaseModel):
@@ -636,10 +828,23 @@ class ResultPostResponse(BaseModel):
 
 @app.post("/result/")
 async def post_result(req: ResultPostRequest, mongodb_database=Depends(get_mongodb)) -> ResultPostResponse:
+    """
+    Store clustering job results in the database.
+
+    Args:
+    - **req**: Complete result data including job metadata, parameters, and labels
+
+    Returns:
+    - **ResultPostResponse**: Confirmation with job ID
+
+    Raises:
+    - **HTTPException**: 500 for database storage errors
+
+    Note:
+    - Typically called by worker processes, not directly by users.
+    """
     try:
         result_collection = mongodb_database.get_collection("results")
-        # Debugging: Logge die zu speichernden Daten
-        print(f"Saving result: {req.model_dump()}")
         await result_collection.insert_one(req.model_dump())
         return ResultPostResponse(job_id=req.job_id)
     except Exception as e:
@@ -707,7 +912,22 @@ class AutoMlClusterResponse(BaseModel):
 @app.post("/automl/job")
 async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_mongodb)) -> AutoMlClusterResponse:
     print("[AutoML] Received new request on /automl/job")
+    """
+    Start an AutoML clustering optimization job.
+    
+    Args:
+    - **req**: AutoML request with dataset, algorithms, and optimization parameters
 
+    Returns:
+    - **AutoMlClusterResponse**: Job ID for tracking the AutoML task
+        
+    Raises:
+    - **HTTPException**: 500 for job creation errors
+        
+    Note:
+    - Automatically evaluates different clustering algorithms and parameters
+        to find optimal configurations based on specified metrics.
+    """
     data_collection = mongodb_database.get_collection("data")
     # Check if the dataset exists
     exists = await data_collection.find_one({"dataset_name": req.dataset_name})
@@ -754,29 +974,6 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
         raise HTTPException(status_code=500, detail=f"Error starting AutoML-Job: {str(e)}")
 
 
-@app.get("/debug/job/{job_id}")
-async def debug_job(job_id: str, mongodb_database=Depends(get_mongodb)):
-    """
-    Debug endpoint to check job status and results
-    """
-    try:
-        # Check Celery task
-        task = celery.AsyncResult(job_id)
-        task_info = {
-            "job_id": task.id,
-            "status": task.status,
-            "result": task.result if task.ready() else None,
-        }
-
-        # Check MongoDB
-        results_collection = mongodb_database.get_collection("results")
-        stored_result = await results_collection.find_one({"job_id": job_id})
-
-        return {"task_info": task_info, "stored_result": stored_result is not None}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}") from e
-
-
 @app.get("/parameters/{algorithm_name}")
 async def get_default_algorithm_parameters(
     algorithm_name: str = Path(
@@ -786,8 +983,18 @@ async def get_default_algorithm_parameters(
     ),
 ) -> dict[str, Any]:
     """
-    Get the default parameters for a specific clustering algorithm.
+    Get default parameters for a specific clustering algorithm.
+
+    Args:
+    - **algorithm_name**: Name of the clustering algorithm
+
+    Returns:
+    - **dict[str, Any]**: Default parameters for the specified algorithm
+
+    Raises:
+    - **HTTPException**: 404 if algorithm not found
     """
+
     algorithm = ALGORITHM_MAP.get(algorithm_name)
     if not algorithm:
         raise HTTPException(status_code=404, detail="Algorithm not found")
@@ -798,6 +1005,9 @@ async def get_default_algorithm_parameters(
 @app.get("/algorithms/")
 async def get_available_algorithms() -> list[str]:
     """
-    Get a list of available clustering algorithms.
+    Get a list of all available clustering algorithms.
+
+    Returns:
+    - **list[str]**: Names of supported clustering algorithms
     """
     return algorithms

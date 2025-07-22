@@ -137,7 +137,7 @@ class BaseClustering(ABC):
                 "created_timestamp": created_timestamp,
                 "started_timestamp": started_timestamp,
                 "finished_timestamp": datetime.now(TIMEZONE).isoformat(),
-                "clustering_algorithm": self.frontend_name,
+                "clustering_algorithm": self.backend_name,
                 "clustering_params": self.clustering_params,
                 "preprocessing_params": self.preprocessing_params,
                 "labels": labels,
