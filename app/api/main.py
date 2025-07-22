@@ -619,6 +619,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> dict[str, Any]:
     """
     Get clustering results as a table with original data and cluster labels.
@@ -634,14 +635,17 @@ async def get_result_table(
     """
 
     result_collection = mongodb_database.get_collection("results")
-    data_collection = mongodb_database.get_collection("data")
     result = await result_collection.find_one({"job_id": job_id})
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
 
-    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-    df = pd.read_csv(io.StringIO(dataset["data"]))
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, result.get("dataset_name"))
+    except S3Error:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(io.StringIO(dataset.read().decode("utf-8")))
     df["labels"] = result.get("labels", [])
 
     return df.to_dict(orient="dict")
@@ -702,6 +706,7 @@ async def get_result_graph(
         title="The column to use for the y-axis. Set only in combination with x_column",
     ),
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> dict[str, Any]:
     """
     Generate a 2D scatter plot visualization of clustering results.
@@ -726,14 +731,18 @@ async def get_result_graph(
     """
 
     result_collection = mongodb_database.get_collection("results")
-    data_collection = mongodb_database.get_collection("data")
 
     result = await result_collection.find_one({"job_id": job_id})
     if not result:
         raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
 
-    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-    df = pd.read_csv(io.StringIO(dataset["data"]))
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, result.get("dataset_name"))
+    except S3Error:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(io.StringIO(dataset.read().decode("utf-8")))
+
     labels = [str(label) for label in result.get("labels")]
 
     if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
