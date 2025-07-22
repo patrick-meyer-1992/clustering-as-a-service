@@ -597,14 +597,28 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
         flower_job["job_id"] = job_id
         flower_job["status"] = job.get("state")
         if job.get("name") == "automl_worker.run_autocluster":
-            flower_job["clustering_algorithm"] = "AutoML"
-            flower_job["dataset_name"] = ast.literal_eval(job.get("kwargs"))["dataset_name"]
-            flower_job["created_timestamp"] = ast.literal_eval(job.get("kwargs"))["created_timestamp"]
+            # Flower cuts off very long kwargs, so we need to handle parsing errors
+            try:
+                kwargs = ast.literal_eval(job.get("kwargs"))
+                flower_job["clustering_algorithm"] = "AutoML"
+                flower_job["dataset_name"] = kwargs["dataset_name"]
+                flower_job["created_timestamp"] = kwargs["created_timestamp"]
+            except (ValueError, SyntaxError) as e:
+                logger.error(f"Error parsing AutoML job parameters: {e}")
+                flower_job["created_timestamp"] = datetime.now(TIMEZONE).isoformat()
+                flower_job["clustering_algorithm"] = "AutoML"
+                flower_job["dataset_name"] = "Unknown"
         else:
-            args = ast.literal_eval(job.get("args"))
-            flower_job["clustering_algorithm"] = args[-2]
-            flower_job["dataset_name"] = args[0]
-            flower_job["created_timestamp"] = args[-3]
+            try:
+                args = ast.literal_eval(job.get("args"))
+                flower_job["clustering_algorithm"] = args[-2]
+                flower_job["dataset_name"] = args[0]
+                flower_job["created_timestamp"] = args[-3]
+            except (ValueError, SyntaxError) as e:
+                logger.error(f"Error parsing job parameters: {e}")
+                flower_job["created_timestamp"] = datetime.now(TIMEZONE).isoformat()
+                flower_job["clustering_algorithm"] = "Unknown"
+                flower_job["dataset_name"] = "Unknown"
         flower_jobs.append(flower_job)
 
     result = sorted(
