@@ -92,7 +92,7 @@ services:
     build:
       context: ./app
       dockerfile: clustering_worker.Dockerfile
-    command: celery -A workers.worker_tasks flower --port=5555
+    command: celery -A "workers.clustering.worker_tasks" flower --port=5555
     env_file:
       - ./message_broker/.env
       - ./redis/.env
