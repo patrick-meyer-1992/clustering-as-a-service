@@ -13,7 +13,6 @@ from clustering.preprocessing_params import PreProcessingParams
 from utils.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL
 from utils.logger import setup_logger
 
-
 logger = setup_logger(__name__)
 
 FASTAPI_URL = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}"
@@ -85,6 +84,8 @@ def get_backend_frontend_mapping():
         for algo in dir(wrappers)
         if algo.endswith("Wrapper")
     }
+
+    mapping["AutoML"] = "AutoML"  # Add AutoML mapping
 
     return mapping
 
