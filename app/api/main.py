@@ -1,5 +1,6 @@
 import ast
 import io
+import json
 import os
 from datetime import datetime
 from enum import Enum
@@ -738,6 +739,7 @@ async def get_result_graph(
     dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
     df = pd.read_csv(io.StringIO(dataset["data"]))
     labels = [str(label) for label in result.get("labels")]
+
     if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
         raise HTTPException(status_code=400, detail="No data for plotting")
 
@@ -748,7 +750,6 @@ async def get_result_graph(
         raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
 
     df = df[[x_column, y_column]]
-
     if df.shape[1] != 2:
         raise HTTPException(status_code=400, detail="Exactly two columns must be selected.")
 
@@ -766,7 +767,8 @@ async def get_result_graph(
         title=f"Clustering: {result.get('clustering_algorithm')}",
         labels={"x": x_column, "y": y_column, "labels": "Cluster"},
     )
-    return fig.to_dict()
+
+    return json.loads(json.dumps(fig.to_dict(), default=lambda x: x.tolist() if hasattr(x, "tolist") else str(x)))
 
 
 class ResultPostRequest(BaseModel):
