@@ -230,6 +230,13 @@ def test_automl_iris():
     assert isinstance(result, list)
     assert len(result) > 0 
 
+def test_get_jobs():
+    response = requests.get(f"{FASTAPI_URL}/jobs/")
+    assert response.status_code == 200
+    jobs = response.json()
+    assert isinstance(jobs, list)
+    assert len(jobs) > 0  
+
 def test_delete_iris():
     response = requests.delete(f"{FASTAPI_URL}/dataset/iris.csv")
     assert response.status_code == 200
