@@ -17,7 +17,8 @@ def validate_clustering_num(clustering_num):
 
 
 def prepare_fit_params(
-    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations, clustering_num
+    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, 
+    n_evaluations, clustering_num, min_proportion=0.01, min_relative_proportion='default'
 ):
     """
     Prepares the configuration dictionary for fitting the AutoCluster pipeline.
@@ -59,6 +60,14 @@ def prepare_fit_params(
     logger.debug(f"Cutoff time: {cutoff_time}, evaluations: {n_evaluations}")
     logger.debug(f"Preprocessing dict: {preprocessing_dict}")
 
+    evaluator = get_evaluator(
+        evaluator_ls,
+        weights=[],
+        clustering_num=clustering_num,
+        min_proportion=min_proportion,
+        min_relative_proportion=min_relative_proportion
+    )
+
     return {
         "df": df,
         "cluster_alg_ls": clustering_algorithms,
@@ -69,7 +78,7 @@ def prepare_fit_params(
         "seed": 27,
         "cutoff_time": cutoff_time,
         "preprocess_dict": preprocessing_dict,
-        "evaluator": get_evaluator(evaluator_ls, weights=[], clustering_num=clustering_num, min_proportion=0.01),
+        "evaluator": evaluator,
         "n_folds": 3,
         "warmstart": False,
         "general_metafeatures": MetafeatureMapper.getGeneralMetafeatures(),

@@ -876,6 +876,10 @@ class AutoMlClusterRequest(BaseModel):
     clustering_num: Tuple[int, int] | None = Field(
         default=None, description="Tuple specifying the range of number of clusters to try (min, max)"
     )
+    min_proportion: float | None = Field(default=0.01, description="Minimale Verhältnisgröße von Clustergrößen")
+    min_relative_proportion: float | str | None = Field(
+        default="default", description="Relative Mindestproportion oder 'default' für 5×min_proportion"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -897,7 +901,9 @@ class AutoMlClusterRequest(BaseModel):
                     "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
                     "n_evaluations": 20,
                     "cutoff_time": 45,
-                    "clustering_num": [1,10]
+                    "clustering_num": [1,10],
+                    "min_proportion": 0.01,
+                    "min_relative_proportion": "default"
                 }
             ]
         }
@@ -970,7 +976,9 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
             "evaluator_ls": req.evaluator_ls,
             "n_evaluations": req.n_evaluations,
             "cutoff_time": req.cutoff_time,
-            "clustering_num": req.clustering_num
+            "clustering_num": req.clustering_num,
+            "min_proportion": req.min_proportion,
+            "min_relative_proportion": req.min_relative_proportion
         }
 
         job = celery.send_task("automl_worker.run_autocluster", kwargs=task_kwargs)

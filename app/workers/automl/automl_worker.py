@@ -28,6 +28,8 @@ def run_autocluster_job(
     cutoff_time=60,
     evaluator_ls=None,
     clustering_num=None,
+    min_proportion=None,
+    min_relative_proportion=None
 ):
     """
     Executes an AutoML clustering job synchronously.
@@ -65,7 +67,8 @@ def run_autocluster_job(
 
         logger.debug(f"[AutoML][{job_id}] Preparing fit params")
         fit_params = prepare_fit_params(
-            df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations, clustering_num
+            df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, 
+            cutoff_time, n_evaluations, clustering_num, min_proportion, min_relative_proportion
         )
 
         started_timestamp = datetime.now(TIMEZONE).isoformat()

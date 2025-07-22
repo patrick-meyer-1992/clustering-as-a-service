@@ -22,6 +22,8 @@ def run_autocluster(
     cutoff_time=60,
     evaluator_ls=None,
     clustering_num=None,
+    min_proportion=None,
+    min_relative_proportion=None
 ):
     """
     Celery task to run an AutoML clustering process in a subprocess.
@@ -72,7 +74,9 @@ def run_autocluster(
                     "n_evaluations": n_evaluations,
                     "cutoff_time": cutoff_time,
                     "evaluator_ls": evaluator_ls,
-                    "clustering_num": clustering_num
+                    "clustering_num": clustering_num,
+                    "min_proportion": min_proportion,
+                    "min_relative_proportion": min_relative_proportion
                 }
             ),
         ]
