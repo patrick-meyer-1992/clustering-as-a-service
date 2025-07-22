@@ -750,20 +750,21 @@ async def get_result_graph(
     df = df[[x_column, y_column]]
 
     if df.shape[1] != 2:
-        raise HTTPException(status_code=400, detail="Data is not 2D")
+        raise HTTPException(status_code=400, detail="Exactly two columns must be selected.")
+
     # Ensure legend items appear in a certain order by specifying category_orders
-    try:
-        unique_labels = sorted(set(int(label) for label in labels))
-    except ValueError:
-        # Fallback to string sorting if conversion fails
-        unique_labels = sorted(set(labels))
+    df["labels"] = labels
+    df["labels"] = df["labels"].astype(int)
+    df.sort_values(by=["labels"], inplace=True)
+    df["labels"] = df["labels"].astype(str)
+
     fig = px.scatter(
-        x=df[x_column],
-        y=df[y_column],
-        color=labels,
+        df,
+        x=x_column,
+        y=y_column,
+        color="labels",
         title=f"Clustering: {result.get('clustering_algorithm')}",
-        labels={"x": x_column, "y": y_column, "color": "Cluster"},
-        category_orders={"color": unique_labels},
+        labels={"x": x_column, "y": y_column, "labels": "Cluster"},
     )
     return fig.to_dict()
 
