@@ -22,7 +22,7 @@ def prepare_fit_params(
         columns (list): List of dictionaries describing the dataset columns.
         clustering_algorithms (list): List of clustering algorithms to evaluate.
         dim_reduction_algorithms (list or None): Dimensionality reduction methods. Defaults to ['NullModel'] if None.
-        evaluator_ls (list or None): Evaluation metrics. Defaults to common metrics if None.
+        evaluator_ls (list or None): Evaluation metrics. Defaults to [silhouetteScore, daviesBouldinScore, calinskiHarabaszScore] if None. 
         cutoff_time (int): Maximum allowed time (in seconds) per evaluation.
         n_evaluations (int): Total number of evaluation iterations to run.
 
@@ -30,7 +30,7 @@ def prepare_fit_params(
         dict: A dictionary of keyword arguments suitable for passing to `AutoCluster.fit()`.
     """
 
-    if not dim_reduction_algorithms:
+    if not dim_reduction_algorithms or dim_reduction_algorithms == [""] or dim_reduction_algorithms == "":
         dim_reduction_algorithms = ["NullModel"]
         logger.warning("No dim_reduction_algorithms provided. Using default: ['NullModel']")
 
