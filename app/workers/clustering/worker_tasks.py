@@ -1,11 +1,12 @@
 from datetime import datetime
 
-import pytz
 from clustering import wrappers
+from utils.config import TIMEZONE
+from utils.logger import setup_logger
 
-from .celery_conn import celery
+from workers.celery_conn import celery
 
-TIMEZONE = pytz.timezone("UTC")
+logger = setup_logger(__name__)
 
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")

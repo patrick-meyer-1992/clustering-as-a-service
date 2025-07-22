@@ -8,5 +8,6 @@ RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
 COPY ./clustering /app/clustering
 COPY ./workers/ /app/workers
+COPY ./utils /app/utils
 
-CMD ["celery", "-A", "workers.tasks", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "workers.clustering.worker_tasks", "worker", "--loglevel=info"]

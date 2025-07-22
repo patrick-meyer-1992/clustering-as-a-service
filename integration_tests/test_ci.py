@@ -137,7 +137,7 @@ def test_post_jobs_iris():
         assert "job_id" in job_response
         assert job_response["job_id"] is not None
 
-        sleep(2)  # Wait for the job to be processed
+        sleep(5)  # Wait for the job to be processed
 
         response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
         assert response.status_code == 200
@@ -170,7 +170,7 @@ def test_post_jobs_numeric_and_text():
         assert response.status_code == 200
         result = response.json()
         assert isinstance(result, list)
-        assert len(result) > 0  # Ensure there are job statuses returned
+        assert len(result) > 0
 
 def test_automl_iris():
     available_cluster_algorithms = [
@@ -200,8 +200,14 @@ def test_automl_iris():
     body ={
         "clustering_algorithms": available_cluster_algorithms,
         "columns": [
-            "sepal.length",
-            "sepal.width"
+            {
+                "name": "sepal.length",
+                "type": "numeric",
+            },
+            {
+                "name": "sepal.width",
+                "type": "numeric",
+            },
         ],
         "cutoff_time": 45,
         "dataset_name": "iris.csv",
@@ -212,9 +218,24 @@ def test_automl_iris():
 
     response = requests.post(f"{FASTAPI_URL}/automl/job", json=body)
     assert response.status_code == 200
+    job_response = response.json()
+    assert "job_id" in job_response
+    assert job_response["job_id"] is not None
 
-    # TODO: Check if the result is saved to mongodb
-    # For that the automl worker needs to be reworked to handle the new column format
+    sleep(60)  # Wait for the job to be processed
+
+    response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
+    assert response.status_code == 200
+    result = response.json()
+    assert isinstance(result, list)
+    assert len(result) > 0 
+
+def test_get_jobs():
+    response = requests.get(f"{FASTAPI_URL}/jobs/")
+    assert response.status_code == 200
+    jobs = response.json()
+    assert isinstance(jobs, list)
+    assert len(jobs) > 0  
 
 def test_delete_iris():
     response = requests.delete(f"{FASTAPI_URL}/dataset/iris.csv")
