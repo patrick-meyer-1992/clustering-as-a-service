@@ -26,7 +26,8 @@ RUN pip install git+https://github.com/wywongbd/autocluster.git@master && \
 RUN python -c "import autocluster; print('AutoCluster import successful')"
 
 COPY ./workers /app/workers
+COPY ./utils /app/utils
 
 ENV PYTHONPATH=/app
 
-CMD ["celery", "-A", "workers.automl_tasks", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]
+CMD ["celery", "-A", "workers.automl.automl_tasks", "worker", "-Q", "automl", "--loglevel=info", "--pool=solo", "--concurrency=2"]

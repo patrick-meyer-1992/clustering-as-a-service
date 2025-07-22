@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 from typing import Literal, get_args
 
 import pandas as pd
@@ -11,10 +10,11 @@ import streamlit as st
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
+from utils.config import FASTAPI_HOST, FASTAPI_PORT, FASTAPI_PROTOCOL
+from utils.logger import setup_logger
 
-FASTAPI_HOST = os.getenv("FASTAPI_HOST")
-FASTAPI_PORT = os.getenv("FASTAPI_PORT")
-FASTAPI_PROTOCOL = os.getenv("FASTAPI_PROTOCOL")
+logger = setup_logger(__name__)
+
 FASTAPI_URL = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}"
 
 if "dataset_name" not in st.session_state:
@@ -24,6 +24,12 @@ if "job_id" not in st.session_state:
 
 
 def get_dataset_list():
+    """
+    Retrieve the list of available datasets from the backend API.
+
+    Returns:
+        list: A list of dataset information dictionaries.
+    """
     try:
         resp = requests.get(f"{FASTAPI_URL}/datasets/")
         if resp.status_code == 200:
@@ -35,6 +41,15 @@ def get_dataset_list():
 
 
 def delete_dataset_backend(dataset_name):
+    """
+    Delete a dataset in the backend by its name.
+
+    Args:
+        dataset_name (str): The name of the dataset to delete.
+
+    Returns:
+        bool: True if deletion was successful, False otherwise.
+    """
     try:
         resp = requests.delete(f"{FASTAPI_URL}/dataset/{dataset_name}")
         return resp.status_code == 200
@@ -45,19 +60,46 @@ def delete_dataset_backend(dataset_name):
 def get_available_clustering_algorithms():
     """
     Dynamically loads all clustering algorithms from the clustering directory.
-    Excludes abstract base class.
-    """
+    Excludes abstract base classes.
 
+    Returns:
+        dict: Dictionary mapping frontend algorithm names to their wrapper classes.
+    """
     algorithms = {
         getattr(wrappers, algo).frontend_name: getattr(wrappers, algo)
         for algo in dir(wrappers)
         if algo.endswith("Wrapper")
     }
-
     return algorithms
 
 
+def get_backend_frontend_mapping():
+    """
+    Dynamically loads the frontend name for each backend name from the clustering directory.
+    Excludes abstract base class.
+    """
+
+    mapping = {
+        getattr(wrappers, algo).backend_name: getattr(wrappers, algo).frontend_name
+        for algo in dir(wrappers)
+        if algo.endswith("Wrapper")
+    }
+
+    mapping["AutoML"] = "AutoML"  # Add AutoML mapping
+
+    return mapping
+
+
 def parse_params_value(value) -> str | int | float | bool | None:
+    """
+    Parse a string parameter value into its appropriate type.
+
+    Args:
+        value (str): The value to parse.
+
+    Returns:
+        str | int | float | bool | None: The parsed value.
+    """
     if not isinstance(value, str):
         return value
     if value.lower() == "none":
@@ -135,7 +177,7 @@ else:
 if st.session_state["dataset_name"]:
     st.subheader("Clustering starten")
 
-    # Lade Spalten und Typen aus Backend
+    # Load columns and types from backend
     available_columns = []
     try:
         resp = requests.get(f"{FASTAPI_URL}/metadata/{st.session_state['dataset_name']}")
@@ -166,41 +208,42 @@ if st.session_state["dataset_name"]:
         )
         select_all = st.checkbox("Alle Spalten auswählen", value=all_selected, key="select_all_columns")
 
-        # Synchronisiere Einzel-Checkboxen, wenn "Alle auswählen" geändert wurde
+        # Synchronize individual checkboxes if "Select All" was changed
         if select_all != all_selected:
             for col in st.session_state["column_selection"]:
                 st.session_state["column_selection"][col]["use"] = select_all
 
-        # Tabellen-Header
+        # Table header
         header = st.columns([1, 3, 2])
         header[0].markdown("**Verwenden**")
         header[1].markdown("**Spaltenname**")
         header[2].markdown("**Typ**")
 
-        # Jede Spalte als eigene Zeile, immer sauber ausgerichtet
+        # Each column as its own row, always neatly aligned
         for col in available_columns:
             col_name = col["name"]
             use = st.session_state["column_selection"][col_name]["use"]
             row = st.columns([1, 3, 2])
-            # Checkbox für verwenden
-            new_use = row[0].checkbox("", value=use, key=f"use_{col_name}")
+            # Checkbox for use
+            new_use = row[0].checkbox("Checkbox", value=use, key=f"use_{col_name}", label_visibility="hidden")
             st.session_state["column_selection"][col_name]["use"] = new_use
-            # Spaltenname
+            # Column name
             row[1].markdown(f"{col_name}")
             new_type = row[2].selectbox(
-                "",
+                "Selectbox",
                 options=st.session_state["column_selection"][col_name]["allowed_types"],
                 index=st.session_state["column_selection"][col_name]["allowed_types"].index(
                     st.session_state["column_selection"][col_name]["selected_type"]
                 ),
                 key=f"type_{col_name}",
+                label_visibility="hidden",
             )
             st.session_state["column_selection"][col_name]["selected_type"] = new_type
 
     else:
         st.error("Keine Spalten im Datensatz gefunden!")
 
-    # Spalten für Clustering
+    # Columns for Clustering
     columns = [
         {"name": col, "type": st.session_state["column_selection"][col]["selected_type"]}
         for col in st.session_state["column_selection"]
@@ -214,7 +257,7 @@ if st.session_state["dataset_name"]:
     selected_evaluators = []
 
     if use_automl:
-        # Mehrfachauswahl für Clustering-Algorithmen
+        # Multiple selection for clustering algorithms
         available_cluster_algorithms = [
             "KMeans",
             "GaussianMixture",
@@ -229,7 +272,7 @@ if st.session_state["dataset_name"]:
             default=available_cluster_algorithms,
         )
 
-        # Mehrfachauswahl für Dimensionality Reduction
+        # Multiple selection for dimensionality reduction algorithms
         available_dim_reduction = [
             "TSNE",
             "PCA",
@@ -244,7 +287,7 @@ if st.session_state["dataset_name"]:
             default=available_dim_reduction,
         )
 
-        # Mehrfachauswahl für Evaluator
+        # Multiple selection for evaluators
         available_evaluators = [
             "silhouetteScore",
             "daviesBouldinScore",
@@ -280,7 +323,7 @@ if st.session_state["dataset_name"]:
         allowed_values = {}
         for name, field in PreProcessingParams.model_fields.items():
             annotation = field.annotation
-            # Only process Literal fields
+            # Only process fields with Literal type
             if getattr(annotation, "__origin__", None) is Literal:
                 allowed_values[name] = get_args(annotation)
 
@@ -324,7 +367,7 @@ if st.session_state["dataset_name"]:
                 filtered_preprocessing_params = {k: v for k, v in chosen_preprocessing_params.items() if v is not None}
             else:
                 filtered_preprocessing_params = None
-            # === Manueller Pfad ===
+            # === Manual path ===
             data = {
                 "dataset_name": dataset_name,
                 "columns": columns,
@@ -342,46 +385,22 @@ if st.session_state["dataset_name"]:
                 st.session_state["job_id"] = job_id
                 st.success(f"Clustering gestartet! Job-ID: {job_id}")
 
-                # Fortschrittsanzeige
-                status_placeholder = st.empty()
-                progress = 0
-                max_wait = cutoff_time  # max 2 Minuten warten
-                poll_interval = 2  # alle 2 Sekunden abfragen
-
-                for _ in range(max_wait // poll_interval):
-                    debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
-                    if debug_resp.status_code == 200:
-                        debug_data = debug_resp.json()
-                        celery_status = debug_data["task_info"]["status"]
-                        if celery_status == "PENDING":
-                            status_placeholder.info("Job ist in der Warteschlange (PENDING)...")
-                        elif celery_status == "STARTED":
-                            status_placeholder.info("Clustering läuft (STARTED)...")
-                        elif celery_status == "SUCCESS":
-                            status_placeholder.success("Clustering abgeschlossen!")
-                            break
-                        elif celery_status == "FAILURE":
-                            status_placeholder.error("Clustering fehlgeschlagen!")
-                            break
-                        else:
-                            status_placeholder.warning(f"Status: {celery_status}")
-                    else:
-                        status_placeholder.warning("Status konnte nicht abgefragt werden.")
-                    time.sleep(poll_interval)
-                else:
-                    status_placeholder.warning("Timeout: Clustering hat zu lange gedauert.")
             else:
                 st.error("Fehler beim Starten des Clusterings")
         except Exception as e:
             st.error(f"Fehler: {str(e)}")
 
+
 # Presentation Section
-# After asynchron clustering job is ended, the results get saved in mongodb.
+# After the asynchronous clustering job has ended, the results are saved in MongoDB.
 # The user can enter the Job-ID to retrieve the results.
 st.subheader("Ergebnisse anzeigen")
 
-# Auswahlmodus für die Job-Auswahl
-job_select_mode = st.radio("Job auswählen", ["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"])
+#
+# Selection mode for job selection
+job_select_mode = st.radio(
+    label="Job auswählen", options=["Manuelle Eingabe", "Aktuellen Job anzeigen", "Job-Historie"], index=0
+)
 
 input_job_id = ""
 if job_select_mode == "Manuelle Eingabe":
@@ -396,32 +415,27 @@ elif job_select_mode == "Aktuellen Job anzeigen":
 elif job_select_mode == "Job-Historie":
 
     def get_job_list():
-        try:
-            resp = requests.get(f"{FASTAPI_URL}/jobs/")
-            if resp.status_code == 200:
-                jobs = resp.json()
-                # Status für jeden Job live abfragen
-                for job in jobs:
-                    job_id = job.get("job_id")
-                    if job_id:
-                        debug_resp = requests.get(f"{FASTAPI_URL}/debug/job/{job_id}")
-                        if debug_resp.status_code == 200:
-                            celery_status = debug_resp.json()["task_info"]["status"]
-                            job["status"] = celery_status
-                return jobs
-            else:
-                return []
-        except Exception:
-            return []
+        """
+        Retrieve the list of clustering jobs from the backend API, including their live status.
+
+        Returns:
+            list: List of job information dictionaries, each updated with their current status.
+        """
+
+        resp = requests.get(f"{FASTAPI_URL}/jobs/")
+        if resp.status_code == 200:
+            jobs = resp.json()
+            return jobs
 
     job_list = get_job_list()
     job_options = []
     job_id_to_label = {}
     if job_list:
-        # Sortiere die Liste so, dass die neuesten Jobs zuerst stehen
-        job_list = sorted(job_list, key=lambda job: job.get("created_timestamp", ""), reverse=True)
+        # Sort the list so that the most recent jobs are first
+        job_list = sorted(job_list, key=lambda job: job.get("created_timestamp"), reverse=True)
         for job in job_list:
-            label = f"{job['job_id']} | {job['dataset_name']} | {job['clustering_algorithm']} | {job['status']}"
+            algorithm_name = get_backend_frontend_mapping().get(job.get("clustering_algorithm"))
+            label = f"{job['job_id']} | {job['dataset_name']} | {algorithm_name} | {job['status']}"
             job_options.append(label)
             job_id_to_label[label] = job["job_id"]
         selected_label = st.selectbox(
@@ -432,59 +446,70 @@ elif job_select_mode == "Job-Historie":
     else:
         st.info("Keine Jobs vorhanden.")
 
-presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Graph", "Tabelle"])
+presentation = ""
+if job_select_mode != "Job-Historie" or selected_label.endswith(" | PERSISTED"):
+    presentation = st.selectbox("Wie sollen Ergebnisse präsentiert werden?", ["Graph", "Tabelle"])
 
-if presentation == "Graph" and input_job_id:
-    url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
-    response = requests.get(url, params={"field": "columns"})
+    if presentation == "Graph" and input_job_id:
+        url = f"{FASTAPI_URL}/result/{input_job_id}/raw"
+        response = requests.get(url, params={"field": "columns"})
 
-    if response.status_code == 404:
-        st.error("Keine Ergebnisse für diese Job-ID gefunden.")
-        st.stop()
-    else:
-        available_result_columns = response.json()
-        available_result_columns = [col.get("name") for col in available_result_columns]
-        selected_result_columns = st.multiselect(
-            "Welche Spalten sollen für den Graphen verwendet werden?",
-            options=available_result_columns,
-            default=available_result_columns[:2],
-            max_selections=2,
-        )
-
-if st.button("Ergebnis anzeigen") and input_job_id:
-    mapping = {"Tabelle": "table", "Graph": "graph"}
-    pres = mapping[presentation]
-    url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
-
-    if len(selected_result_columns) != 2 and pres == "graph":
-        st.error("Für den Graphen müssen genau zwei Spalten ausgewählt werden.")
-        st.stop()
-    try:
-        params = (
-            None
-            if pres == "table"
-            else {
-                "x_column": selected_result_columns[0],
-                "y_column": selected_result_columns[1],
-            }
-        )
-        resp = requests.get(url, params=params)
-        if resp.status_code == 200:
-            data = resp.json()
-            # Präsentation auf voller Breite
-            if pres == "table":
-                st.dataframe(pd.DataFrame(data), use_container_width=True)
-            elif pres == "graph":
-                fig = go.Figure(data)
-                if not fig.data:
-                    st.warning("Keine Daten für Plot vorhanden.")
-                else:
-                    st.plotly_chart(fig, use_container_width=True)
+        if response.status_code == 404:
+            st.warning(
+                ""
+                "Entweder gibt es keine Jobs zu dieser ID "
+                "oder die Ergebnisse sind noch nicht verfügbar. "
+                "Bitte prüfen Sie, ob die ID gültig ist oder warten Sie, "
+                "bis der Job abgeschlossen ist."
+            )
+            st.stop()
         else:
-            try:
-                msg = resp.json().get("detail", resp.text)
-            except Exception:
-                msg = resp.text
-            st.error(f"Fehler: {msg}")
-    except Exception as e:
-        st.error(f"Fehler beim Abrufen der Ergebnisse: {e}")
+            available_result_columns = response.json()
+            available_result_columns = [col.get("name") for col in available_result_columns]
+            selected_result_columns = st.multiselect(
+                "Welche Spalten sollen für den Graphen verwendet werden?",
+                options=available_result_columns,
+                default=available_result_columns[:2],
+                max_selections=2,
+            )
+
+    if st.button("Ergebnis anzeigen") and input_job_id:
+        mapping = {"Tabelle": "table", "Graph": "graph"}
+        pres = mapping[presentation]
+        url = f"{FASTAPI_URL}/result/{input_job_id}/{pres}"
+
+        if pres == "graph" and len(selected_result_columns) != 2:
+            st.error("Für den Graphen müssen genau zwei Spalten ausgewählt werden.")
+            st.stop()
+        try:
+            params = (
+                None
+                if pres == "table"
+                else {
+                    "x_column": selected_result_columns[0],
+                    "y_column": selected_result_columns[1],
+                }
+            )
+            resp = requests.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Präsentation auf voller Breite
+                if pres == "table":
+                    st.dataframe(pd.DataFrame(data), use_container_width=True)
+                elif pres == "graph":
+                    fig = go.Figure(data)
+                    if not fig.data:
+                        st.warning("Keine Daten für Plot vorhanden.")
+                    else:
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                try:
+                    msg = resp.json().get("detail", resp.text)
+                except Exception:
+                    msg = resp.text
+                st.error(f"Fehler: {msg}")
+        except Exception as e:
+            st.error(f"Fehler beim Abrufen der Ergebnisse: {e}")
+else:
+    st.warning("Die Ergebnisse sind noch nicht verfügbar. Bitte warten Sie, bis der Job abgeschlossen ist.")
+    st.stop()
