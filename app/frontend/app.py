@@ -303,6 +303,10 @@ if st.session_state["dataset_name"]:
             value=60,
             step=10,
         )
+        min_clusters = st.number_input("Minimale Clusteranzahl", min_value=1, max_value=100, value=2, step=1)
+        max_clusters = st.number_input("Maximale Clusteranzahl", min_value=min_clusters, max_value=100, value=10, step=1)
+        clustering_num = (min_clusters, max_clusters)
+
 
     else:
         # Dynamic algorithm selection
@@ -359,6 +363,7 @@ if st.session_state["dataset_name"]:
                 "evaluator_ls": selected_evaluators,
                 "n_evaluations": n_evaluations,
                 "cutoff_time": cutoff_time,
+                "clustering_num": clustering_num
             }
 
         else:

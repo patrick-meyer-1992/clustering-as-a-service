@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Tuple
 
 import pandas as pd
 import plotly.express as px
@@ -873,6 +873,9 @@ class AutoMlClusterRequest(BaseModel):
     )
     n_evaluations: int | None = Field(default=50, description="Number of AutoML evaluations to run")
     cutoff_time: int | None = Field(default=60, description="Time limit in seconds for each AutoML evaluation")
+    clustering_num: Tuple[int, int] | None = Field(
+        default=None, description="Tuple specifying the range of number of clusters to try (min, max)"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -894,6 +897,7 @@ class AutoMlClusterRequest(BaseModel):
                     "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
                     "n_evaluations": 20,
                     "cutoff_time": 45,
+                    "clustering_num": [1,10]
                 }
             ]
         }
@@ -966,6 +970,7 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
             "evaluator_ls": req.evaluator_ls,
             "n_evaluations": req.n_evaluations,
             "cutoff_time": req.cutoff_time,
+            "clustering_num": req.clustering_num
         }
 
         job = celery.send_task("automl_worker.run_autocluster", kwargs=task_kwargs)

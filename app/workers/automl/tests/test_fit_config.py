@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ..fit_config import prepare_fit_params
+from ..fit_config import prepare_fit_params, validate_clustering_num
 
 
 def test_prepare_fit_params_returns_valid_dict():
@@ -12,7 +12,7 @@ def test_prepare_fit_params_returns_valid_dict():
         {"name": "c", "type": "nominal"},
     ]
 
-    fit_params = prepare_fit_params(df, columns, ["KMeans"], ["PCA"], ["silhouetteScore"], 30, 10)
+    fit_params = prepare_fit_params(df, columns, ["KMeans"], ["PCA"], ["silhouetteScore"], 30, 10, None)
 
     assert isinstance(fit_params, dict)
     assert fit_params["df"].equals(df)
@@ -30,7 +30,7 @@ def test_prepare_fit_params_returns_NullModel_on_null():
         {"name": "a", "type": "numeric"},
     ]
 
-    fit_params = prepare_fit_params(df, columns, ["KMeans"], None, ["silhouetteScore"], 30, 10)
+    fit_params = prepare_fit_params(df, columns, ["KMeans"], None, ["silhouetteScore"], 30, 10, None)
 
     assert isinstance(fit_params, dict)
     assert fit_params["dim_reduction_alg_ls"] == ["NullModel"]
@@ -42,7 +42,7 @@ def test_prepare_fit_params_returns_NullModel_on_empty_list():
         {"name": "a", "type": "numeric"},
     ]
 
-    fit_params = prepare_fit_params(df, columns, ["KMeans"], [], ["silhouetteScore"], 30, 10)
+    fit_params = prepare_fit_params(df, columns, ["KMeans"], [], ["silhouetteScore"], 30, 10, None)
 
     assert isinstance(fit_params, dict)
     assert fit_params["dim_reduction_alg_ls"] == ["NullModel"]
@@ -55,7 +55,7 @@ def test_prepare_fit_params_returns_NullModel_on_empty_string_in_list():
         {"name": "a", "type": "numeric"},
     ]
 
-    fit_params = prepare_fit_params(df, columns, ["KMeans"], [""], ["silhouetteScore"], 30, 10)
+    fit_params = prepare_fit_params(df, columns, ["KMeans"], [""], ["silhouetteScore"], 30, 10, None)
 
     assert isinstance(fit_params, dict)
     assert fit_params["dim_reduction_alg_ls"] == ["NullModel"]
@@ -69,11 +69,17 @@ def test_prepare_fit_params_returns_NullModel_on_empty_string():
         {"name": "a", "type": "numeric"},
     ]
 
-    fit_params = prepare_fit_params(df, columns, ["KMeans"], "", ["silhouetteScore"], 30, 10)
+    fit_params = prepare_fit_params(df, columns, ["KMeans"], "", ["silhouetteScore"], 30, 10, None)
 
     assert isinstance(fit_params, dict)
     assert fit_params["dim_reduction_alg_ls"] == ["NullModel"]
 
+
+def test_validate_clustering_num():
+    assert validate_clustering_num((2, 5)) == (2, 5)
+    assert validate_clustering_num((5, 2)) is None
+    assert validate_clustering_num("abc") is None
+    assert validate_clustering_num((2, "a")) is None
 
 
     #    "df": df,

@@ -6,8 +6,18 @@ from workers.automl.preprocessing import build_preprocess_dict
 logger = setup_logger(__name__)
 
 
+def validate_clustering_num(clustering_num):
+    if isinstance(clustering_num, (list, tuple)) and len(clustering_num) == 2:
+        a, b = clustering_num
+        if isinstance(a, int) and isinstance(b, int) and a <= b:
+            return (a, b)
+    logger.warning(f"Invalid clustering_num: {clustering_num}. Setting to None.")
+    return None
+
+
+
 def prepare_fit_params(
-    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations
+    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations, clustering_num
 ):
     """
     Prepares the configuration dictionary for fitting the AutoCluster pipeline.
@@ -38,6 +48,8 @@ def prepare_fit_params(
         evaluator_ls = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
         logger.warning("No evaluator list provided. Using default evaluators.")
 
+    clustering_num = validate_clustering_num(clustering_num)
+
     preprocessing_dict = build_preprocess_dict(df, columns)
 
     logger.info("Preparing fit parameters for AutoML job")
@@ -57,7 +69,7 @@ def prepare_fit_params(
         "seed": 27,
         "cutoff_time": cutoff_time,
         "preprocess_dict": preprocessing_dict,
-        "evaluator": get_evaluator(evaluator_ls, weights=[1, 1, 1], clustering_num=None, min_proportion=0.01),
+        "evaluator": get_evaluator(evaluator_ls, weights=[], clustering_num=clustering_num, min_proportion=0.01),
         "n_folds": 3,
         "warmstart": False,
         "general_metafeatures": MetafeatureMapper.getGeneralMetafeatures(),
