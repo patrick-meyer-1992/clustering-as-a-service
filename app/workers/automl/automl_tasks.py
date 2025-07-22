@@ -78,25 +78,32 @@ def run_autocluster(
         env = os.environ.copy()
         env["PYTHONPATH"] = "/app"
 
-        completed_process = subprocess.run(
+        process = subprocess.Popen(
             args,
             env=env,
-            capture_output=True,
-            text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # line-buffered
         )
 
-        if completed_process.returncode != 0:
-            combined_output = (completed_process.stderr or "") + "\n" + (completed_process.stdout or "")
-            # Finde die letzte sinnvolle Zeile (nicht leer)
-            lines = [line.strip() for line in combined_output.strip().splitlines() if line.strip()]
-            last_line = lines[-1] if lines else "Unknown error"
+        error_message = None
 
-            logger.error(f"[AutoML][{job_id}] Subprocess failed: {last_line}")
+        with process.stdout:
+            for line in process.stdout:
+                line = line.strip()
+                logger.info(f"[AutoML][{job_id}] {line}")
+                if "Traceback" in line or "Error" in line or "Exception" in line:
+                    error_message = line  # oder verbessertes Error-Parsing
 
+        return_code = process.wait()
+
+        if return_code != 0:
+            logger.error(f"[AutoML][{job_id}] Subprocess failed with return code {return_code}")
             return {
                 "status": "error",
                 "job_id": job_id,
-                "error": last_line,
+                "error": error_message or f"Subprocess failed with return code {return_code}"
             }
 
         return {"status": "SUCCESS", "job_id": job_id}
