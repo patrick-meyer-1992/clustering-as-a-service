@@ -78,18 +78,33 @@ def run_autocluster(
         env = os.environ.copy()
         env["PYTHONPATH"] = "/app"
 
-        logger.info(f"[AutoML][{job_id}] Starting subprocess: {' '.join(args)}")
-        subprocess.run(args, env=env)
+        completed_process = subprocess.run(
+            args,
+            env=env,
+            capture_output=True,
+            text=True
+        )
 
-        logger.debug(f"[AutoML][{job_id}] Passed task to subprocess")
+        if completed_process.returncode != 0:
+            combined_output = (completed_process.stderr or "") + "\n" + (completed_process.stdout or "")
+            # Finde die letzte sinnvolle Zeile (nicht leer)
+            lines = [line.strip() for line in combined_output.strip().splitlines() if line.strip()]
+            last_line = lines[-1] if lines else "Unknown error"
 
-        return {"status": "submitted", "job_id": job_id}
+            logger.error(f"[AutoML][{job_id}] Subprocess failed: {last_line}")
 
-    except subprocess.CalledProcessError as e:
-        logger.error(f"[AutoML][{job_id}] Subprocess failed with return code {e.returncode}")
-        logger.error(f"[AutoML][{job_id}] Output:\n{e.output}")
-        return {"status": "error", "job_id": job_id, "error": str(e)}
+            return {
+                "status": "error",
+                "job_id": job_id,
+                "error": last_line,
+            }
+
+        return {"status": "SUCCESS", "job_id": job_id}
 
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Unexpected error during subprocess execution")
-        return {"status": "error", "job_id": job_id, "error": str(e)}
+        return {
+            "status": "error",
+            "job_id": job_id,
+            "error": str(e)
+        }

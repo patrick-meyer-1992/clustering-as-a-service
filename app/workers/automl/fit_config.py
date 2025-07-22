@@ -38,7 +38,7 @@ def prepare_fit_params(
         evaluator_ls = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
         logger.warning("No evaluator list provided. Using default evaluators.")
 
-    preprocessing_dict = build_preprocess_dict(columns)
+    preprocessing_dict = build_preprocess_dict(df, columns)
 
     logger.info("Preparing fit parameters for AutoML job")
     logger.debug(f"Selected clustering algorithms: {clustering_algorithms}")
