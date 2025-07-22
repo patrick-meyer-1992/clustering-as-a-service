@@ -22,6 +22,31 @@ def run_autocluster(
     cutoff_time=60,
     evaluator_ls=None,
 ):
+    """
+    Celery task to run an AutoML clustering process in a subprocess.
+
+    This function prepares and starts a subprocess that executes the AutoML
+    pipeline defined in `automl_worker.py`. All parameters are serialized and passed
+    to the subprocess as command-line arguments.
+
+    Parameters:
+        dataset_name (str): The name of the dataset to be clustered.
+        columns (list): A list of column metadata dictionaries to use in clustering.
+        created_timestamp (str): Timestamp string indicating when the dataset was created.
+        clustering_algorithms (list, optional): List of clustering algorithm names to evaluate.
+        dim_reduction_algorithms (list, optional): List of dimensionality reduction methods to use.
+        n_evaluations (int, optional): Number of configurations to evaluate. Defaults to 50.
+        cutoff_time (int, optional): Maximum time (in seconds) for a single evaluation. Defaults to 60.
+        evaluator_ls (list, optional): List of evaluator functions or scoring strategies.
+
+    Returns:
+        dict: A dictionary containing the task status and job ID. If an error occurs, includes an error message.
+
+    Raises:
+        subprocess.CalledProcessError: If the subprocess exits with a non-zero status.
+        Exception: For any unexpected errors during subprocess invocation.
+    """
+        
     job_id = self.request.id
 
     logger.info(f"[AutoML][{job_id}] Task received. Delegating to subprocess.")

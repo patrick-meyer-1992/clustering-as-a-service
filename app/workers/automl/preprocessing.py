@@ -5,18 +5,31 @@ logger = setup_logger(__name__)
 
 def build_preprocess_dict(columns_list):
     """
-    Builds a preprocess_dict from a list of dictionaries with structure:
-    [{"name": "sepal_length", "type": "numeric"}, ...]
+    Constructs a preprocessing configuration dictionary based on column metadata.
 
-    Returns a dictionary with keys:
-    - numeric_cols
-    - categorical_cols (for type 'nominal')
-    - ordinal_cols
-    - y_col (always empty for unsupervised clustering)
+    This function parses a list of column definitions and groups them by type
+    into separate lists for numeric, nominal (categorical), and ordinal features.
+    It also initializes an empty target column list, since clustering is unsupervised.
 
-    :param columns_list: List of dicts with 'name' and 'type' keys
-    :return: Dictionary in the expected preprocess_dict format
+    Parameters:
+        columns_list (list): A list of dictionaries, each containing at least the keys:
+            - "name" (str): The column name.
+            - "type" (str): The column type, one of {"numeric", "nominal", "ordinal"}.
+
+    Returns:
+        dict: A dictionary with the structure:
+            {
+                "numeric_cols": list of str,
+                "categorical_cols": list of str,
+                "ordinal_cols": list of str,
+                "y_col": []  # always empty in unsupervised clustering
+            }
+
+    Notes:
+        - Invalid or malformed column entries are skipped with a warning.
+        - Unknown types are ignored and not included in the result.
     """
+    
     numeric_cols = []
     categorical_cols = []
     ordinal_cols = []
@@ -47,7 +60,3 @@ def build_preprocess_dict(columns_list):
 
     logger.debug(f"[Preprocessing] Built preprocess_dict: {preprocess_dict}")
     return preprocess_dict
-
-
-# TODO: Optional – Validate column types against allowed values (numeric, nominal, ordinal)
-#       Raise or collect warnings if invalid types are found

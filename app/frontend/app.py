@@ -361,6 +361,7 @@ if st.session_state["dataset_name"]:
                 "n_evaluations": n_evaluations,
                 "cutoff_time": cutoff_time,
             }
+            cutoff_time *= 100
 
         else:
             if preprocess:
