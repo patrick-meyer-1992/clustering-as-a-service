@@ -348,7 +348,6 @@ if st.session_state["dataset_name"]:
         dataset_name = st.session_state["dataset_name"]
 
         cluster_url = f"{FASTAPI_URL}/automl/job" if use_automl else f"{FASTAPI_URL}/job/"
-        cutoff_time = 120  # Default cutoff time for manual clustering
 
         if use_automl:
             dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
@@ -361,7 +360,6 @@ if st.session_state["dataset_name"]:
                 "n_evaluations": n_evaluations,
                 "cutoff_time": cutoff_time,
             }
-            cutoff_time *= 100
 
         else:
             if preprocess:
