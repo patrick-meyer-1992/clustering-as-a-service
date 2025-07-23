@@ -1,9 +1,17 @@
 from utils.logger import setup_logger
+from typing import TypedDict, Literal
+import pandas as pd
+
 
 logger = setup_logger(__name__)
 
 
-def build_preprocess_dict(df, columns_list):
+class ColumnDefinition(TypedDict):
+    name: str
+    type: Literal["numeric", "nominal", "ordinal"]
+
+
+def build_preprocess_dict(df: pd.DataFrame, columns_list: list[ColumnDefinition]):
     """
     Constructs a preprocessing configuration dictionary based on column metadata and data.
 

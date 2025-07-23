@@ -22,7 +22,6 @@ def test_prepare_fit_params_returns_valid_dict():
     assert fit_params["n_evaluations"] == 10
 
 
-
 def test_prepare_fit_params_returns_NullModel_on_null():
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": ["x", "y", "z"]})
 
@@ -34,6 +33,7 @@ def test_prepare_fit_params_returns_NullModel_on_null():
 
     assert isinstance(fit_params, dict)
     assert fit_params["dim_reduction_alg_ls"] == ["NullModel"]
+
 
 def test_prepare_fit_params_returns_NullModel_on_empty_list():
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": ["x", "y", "z"]})

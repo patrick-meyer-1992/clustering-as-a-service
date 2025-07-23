@@ -100,3 +100,5 @@ def send_results_to_backend(
 
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Exception during result transmission: {e}")
+        raise e
+    
