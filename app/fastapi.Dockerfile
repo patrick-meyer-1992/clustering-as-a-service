@@ -9,5 +9,6 @@ RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
 COPY ./clustering /app/clustering
 COPY ./workers/ /app/workers
 COPY ./api /app/api
+COPY ./utils /app/utils
 
 CMD ["fastapi", "run", "/app/api/main.py", "--port", "8000"]

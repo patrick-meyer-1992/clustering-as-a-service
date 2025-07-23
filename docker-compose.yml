@@ -15,6 +15,10 @@ services:
       - ./mongodb/.env
     environment:
       - DEBUG=1 # For hot reload
+      - MINIO_URL=caas-minio:9000
+      - MINIO_ACCESS_KEY=minio_admin
+      - MINIO_SECRET_KEY=minio_admin
+      - MINIO_BUCKET_NAME=caas-data
       - FLOWER_URL=http://caas-flower:5555
 
   streamlit:
@@ -26,6 +30,8 @@ services:
       - "8501:8501"
     env_file:
       - ./app/api/.env
+    environment:
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=2048
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -80,6 +86,19 @@ services:
     env_file:
       - ./mongodb/.env
 
+  minio:
+    image: minio/minio
+    container_name: caas-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ACCESS_KEY: minio_admin
+      MINIO_SECRET_KEY: minio_admin
+
   redis:
     image: redis
     restart: unless-stopped
@@ -92,7 +111,7 @@ services:
     build:
       context: ./app
       dockerfile: clustering_worker.Dockerfile
-    command: celery -A workers.tasks flower --port=5555
+    command: celery -A "workers.clustering.worker_tasks" flower --port=5555
     env_file:
       - ./message_broker/.env
       - ./redis/.env
@@ -109,6 +128,8 @@ services:
     build:
       context: ./app
       dockerfile: automl.Dockerfile
+    volumes:
+      - ./app:/app
     env_file:
       - ./message_broker/.env
       - ./redis/.env
@@ -122,4 +143,6 @@ volumes:
   rabbitmq-log:
     driver: local
   mongodb-data:
+    driver: local
+  minio-data:
     driver: local
