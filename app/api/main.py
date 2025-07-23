@@ -664,35 +664,6 @@ class ResultField(str, Enum):
     additional_results = "additional_results"
 
 
-@app.get("/result/{job_id}/raw")
-async def get_result_raw(
-    job_id: str,
-    field: ResultField | None = Query(
-        "labels",
-        title="The field to return from the result. If not set, only the labels are returned.",
-    ),
-    mongodb_database=Depends(get_mongodb),
-) -> Any:
-    """
-    Get raw clustering result data for a specific field.
-
-    Args:
-    - **job_id**: ID of the clustering job
-    - **field**: Specific result field to return (default: labels)
-
-    Returns:
-    - **Any**: Raw result data for the requested field
-
-    Raises:
-    - **HTTPException**: 404 if result not found, 500 for server errors
-    """
-    result_collection = mongodb_database.get_collection("results")
-    result = await result_collection.find_one({"job_id": job_id}, {"_id": 0, field: 1})
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
-    return result.get(field)
-
-
 @app.get("/result/{job_id}/graph")
 async def get_result_graph(
     job_id: str,
