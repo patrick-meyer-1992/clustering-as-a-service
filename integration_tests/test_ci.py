@@ -1,6 +1,9 @@
 import requests
 import os
 from time import sleep
+import pandas as pd
+import io
+import plotly.graph_objects as go
 
 FASTAPI_URL = "http://localhost:7002"
 
@@ -237,10 +240,30 @@ def test_get_jobs():
     assert isinstance(jobs, list)
     assert len(jobs) > 0  
 
+def test_get_deleted_result():
+    response = requests.get(f"{FASTAPI_URL}/result/12345/raw")
+    assert response.status_code == 404 
+
+def test_delete_non_existent_dataset():
+    response = requests.delete(f"{FASTAPI_URL}/dataset/non_existent.csv")
+    assert response.status_code == 404  
+
+def test_get_result_table():
+    job_list = requests.get(f"{FASTAPI_URL}/jobs/").json()
+    job_id = job_list[0]["job_id"]
+    response = requests.get(f"{FASTAPI_URL}/result/{job_id}/table")
+    assert response.status_code == 200
+    result_table = pd.DataFrame(response.json())
+    assert isinstance(result_table, pd.DataFrame)
+
+def test_get_result_graph():
+    job_list = requests.get(f"{FASTAPI_URL}/jobs/").json()
+    job_id = job_list[0]["job_id"]
+    response = requests.get(f"{FASTAPI_URL}/result/{job_id}/graph")
+    assert response.status_code == 200
+    fig = go.Figure(response.json())
+    assert isinstance(fig, go.Figure)
+
 def test_delete_iris():
     response = requests.delete(f"{FASTAPI_URL}/dataset/iris.csv")
     assert response.status_code == 200
-
-def test_get_deleted_result():
-    response = requests.get(f"{FASTAPI_URL}/result/12345/raw")
-    assert response.status_code == 404  # Expecting a 404 Not Found for deleted result

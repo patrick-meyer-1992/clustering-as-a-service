@@ -347,15 +347,30 @@ async def delete_dataset(
 ) -> DatasetDeleteResponse:
     """
     Delete a dataset from mongoDB and all results associated with it.
-    """
 
+    Args:
+    - **dataset_name**: The name of the dataset to delete.
+
+    Returns:
+    - **DatasetDeleteResponse**: Response containing the dataset name and associated job IDs
+
+    Raises:
+    - **HTTPException**:
+        - 404 if dataset not found
+        - 500 for server errors
+    """
     # Delete the dataset from mongoDB
     data_collection = mongodb_database.get_collection("data")
     result_collection = mongodb_database.get_collection("results")
+
+    exists = await data_collection.find_one({"dataset_name": dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
     # Get all job IDs associated with the dataset
     jobs = await result_collection.find({"dataset_name": dataset_name}, {"_id": 0, "job_id": 1}).to_list(length=None)
     await result_collection.delete_many({"dataset_name": dataset_name})
-    result = await data_collection.delete_one({"dataset_name": dataset_name})
+    await data_collection.delete_one({"dataset_name": dataset_name})
 
     # Delete the dataset from MinIO
     try:
@@ -363,10 +378,7 @@ async def delete_dataset(
     except S3Error as e:
         print(f"Error deleting object from MinIO. It still got deleted from mongoDB: {e}")
 
-    if result.deleted_count == 1:
-        return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
-    else:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
 
 
 class DatasetGetResponse(BaseModel):
@@ -762,8 +774,8 @@ async def get_result_graph(
         raise HTTPException(status_code=400, detail="No data for plotting")
 
     if x_column is None or y_column is None:
-        x_column = result.get("columns")[0]
-        y_column = result.get("columns")[1]
+        x_column = result.get("columns")[0].get("name")
+        y_column = result.get("columns")[1].get("name")
     elif x_column not in df.columns or y_column not in df.columns:
         raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
 
