@@ -303,6 +303,26 @@ if st.session_state["dataset_name"]:
             value=60,
             step=10,
         )
+        min_clusters = st.number_input("Minimale Clusteranzahl", min_value=2, max_value=300, value=2)
+        max_clusters = st.number_input("Maximale Clusteranzahl", min_value=2, max_value=300, value=10)
+
+        if min_clusters > max_clusters:
+            st.error("Minimale Clusteranzahl darf nicht größer sein als maximale Clusteranzahl.")
+        clustering_num = (min_clusters, max_clusters)
+
+
+        min_proportion = st.number_input(
+            "Minimale Clustergrößenverhältnis (minimale Clustergröße / maximale Clustergröße)", min_value=0.0, max_value=1.0, value=0.01, step=0.01
+        )
+
+        min_relative_proportion = None
+        min_relative_proportion_mode = st.selectbox(
+            "Minimale relative Proportion",
+            options=["default", "keine Einschränkung"],
+            index=0,
+        )
+        if min_relative_proportion_mode == "keine Einschränkung":
+            min_relative_proportion = "default"
 
     else:
         # Dynamic algorithm selection
@@ -348,7 +368,6 @@ if st.session_state["dataset_name"]:
         dataset_name = st.session_state["dataset_name"]
 
         cluster_url = f"{FASTAPI_URL}/automl/job" if use_automl else f"{FASTAPI_URL}/job/"
-        cutoff_time = 120  # Default cutoff time for manual clustering
 
         if use_automl:
             dim_algos = [algo for algo in selected_dim_reduction if algo != "Keine"]
@@ -360,6 +379,9 @@ if st.session_state["dataset_name"]:
                 "evaluator_ls": selected_evaluators,
                 "n_evaluations": n_evaluations,
                 "cutoff_time": cutoff_time,
+                "clustering_num": clustering_num,
+                "min_proportion": min_proportion,
+                "min_relative_proportion": min_relative_proportion
             }
 
         else:

@@ -13,6 +13,36 @@ logger = logging.getLogger(__name__)
 def send_results_to_backend(
     job_id, dataset_name, columns, created_timestamp, started_timestamp, result_dict, cluster, df
 ):
+    """
+    Sends the clustering results and metadata to the FastAPI backend for persistence.
+
+    This function collects relevant results from the AutoML clustering run,
+    including model parameters, predictions, metafeatures, and timestamps.
+    It then formats and posts this information as JSON to the backend API.
+
+    Parameters:
+        job_id (str): Unique identifier for the current AutoML task.
+        dataset_name (str): The name of the dataset used in the clustering task.
+        columns (list): List of column metadata dicts used in the run.
+        created_timestamp (str): Original timestamp of dataset creation.
+        started_timestamp (str): Timestamp when clustering was started.
+        result_dict (dict): Dictionary containing clustering results and metadata.
+        cluster (object): AutoCluster instance used for fitting and prediction.
+        df (pandas.DataFrame): The dataset used for clustering.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If the HTTP POST request fails or any critical error occurs during transmission.
+
+    Notes:
+        - Uses internal helper `sanitize_result_dict()` to prepare serializable result entries.
+        - Uses `extract_params_from_model()` to retrieve model hyperparameters, if available.
+        - Automatically adds timestamps and converts NumPy arrays to lists for JSON compatibility.
+        - Sends data to the `/result/` endpoint of the FastAPI backend.
+    """
+
     logger.info(f"[AutoML][{job_id}] Preparing to send results for dataset '{dataset_name}'")
 
     def sanitize_result_dict(result_dict):
@@ -70,3 +100,5 @@ def send_results_to_backend(
 
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Exception during result transmission: {e}")
+        raise e
+    

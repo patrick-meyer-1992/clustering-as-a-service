@@ -6,10 +6,42 @@ from workers.automl.preprocessing import build_preprocess_dict
 logger = setup_logger(__name__)
 
 
+def validate_clustering_num(clustering_num):
+    if isinstance(clustering_num, (list, tuple)) and len(clustering_num) == 2:
+        a, b = clustering_num
+        if isinstance(a, int) and isinstance(b, int) and a <= b:
+            return (a, b)
+    logger.warning(f"Invalid clustering_num: {clustering_num}. Setting to None.")
+    return None
+
+
+
 def prepare_fit_params(
-    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations
+    df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, 
+    n_evaluations, clustering_num, min_proportion=0.01, min_relative_proportion='default'
 ):
-    if not dim_reduction_algorithms:
+    """
+    Prepares the configuration dictionary for fitting the AutoCluster pipeline.
+
+    This function generates all necessary parameters required for the AutoML process,
+    including preprocessing settings, evaluator construction, and metafeatures.
+
+    If no dimensionality reduction algorithms or evaluators are provided, defaults are used.
+
+    Parameters:
+        df (pandas.DataFrame): The preprocessed dataset to cluster.
+        columns (list): List of dictionaries describing the dataset columns.
+        clustering_algorithms (list): List of clustering algorithms to evaluate.
+        dim_reduction_algorithms (list or None): Dimensionality reduction methods. Defaults to ['NullModel'] if None.
+        evaluator_ls (list or None): Evaluation metrics. Defaults to [silhouetteScore, daviesBouldinScore, calinskiHarabaszScore] if None. 
+        cutoff_time (int): Maximum allowed time (in seconds) per evaluation.
+        n_evaluations (int): Total number of evaluation iterations to run.
+
+    Returns:
+        dict: A dictionary of keyword arguments suitable for passing to `AutoCluster.fit()`.
+    """
+
+    if not dim_reduction_algorithms or dim_reduction_algorithms == [""] or dim_reduction_algorithms == "":
         dim_reduction_algorithms = ["NullModel"]
         logger.warning("No dim_reduction_algorithms provided. Using default: ['NullModel']")
 
@@ -17,7 +49,9 @@ def prepare_fit_params(
         evaluator_ls = ["silhouetteScore", "daviesBouldinScore", "calinskiHarabaszScore"]
         logger.warning("No evaluator list provided. Using default evaluators.")
 
-    preprocessing_dict = build_preprocess_dict(columns)
+    clustering_num = validate_clustering_num(clustering_num)
+
+    preprocessing_dict = build_preprocess_dict(df, columns)
 
     logger.info("Preparing fit parameters for AutoML job")
     logger.debug(f"Selected clustering algorithms: {clustering_algorithms}")
@@ -25,6 +59,14 @@ def prepare_fit_params(
     logger.debug(f"Selected evaluators: {evaluator_ls}")
     logger.debug(f"Cutoff time: {cutoff_time}, evaluations: {n_evaluations}")
     logger.debug(f"Preprocessing dict: {preprocessing_dict}")
+
+    evaluator = get_evaluator(
+        evaluator_ls,
+        weights=[],
+        clustering_num=clustering_num,
+        min_proportion=min_proportion,
+        min_relative_proportion=min_relative_proportion
+    )
 
     return {
         "df": df,
@@ -36,7 +78,7 @@ def prepare_fit_params(
         "seed": 27,
         "cutoff_time": cutoff_time,
         "preprocess_dict": preprocessing_dict,
-        "evaluator": get_evaluator(evaluator_ls, weights=[1, 1, 1], clustering_num=None, min_proportion=0.01),
+        "evaluator": evaluator,
         "n_folds": 3,
         "warmstart": False,
         "general_metafeatures": MetafeatureMapper.getGeneralMetafeatures(),

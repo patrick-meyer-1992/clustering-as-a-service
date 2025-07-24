@@ -27,7 +27,35 @@ def run_autocluster_job(
     n_evaluations=50,
     cutoff_time=60,
     evaluator_ls=None,
+    clustering_num=None,
+    min_proportion=None,
+    min_relative_proportion=None
 ):
+    """
+    Executes an AutoML clustering job synchronously.
+
+    This function fetches the dataset, prepares fit parameters, runs the
+    AutoCluster pipeline, and sends the resulting metadata and metrics
+    back to the backend service.
+
+    Parameters:
+        job_id (str): Unique identifier for the clustering job.
+        dataset_name (str): The name of the dataset to be clustered.
+        columns (list): List of column definitions (e.g., name, type).
+        created_timestamp (str): Timestamp indicating dataset creation time.
+        clustering_algorithms (list, optional): Algorithms to be evaluated.
+        dim_reduction_algorithms (list, optional): Dimensionality reduction methods.
+        n_evaluations (int, optional): Number of configurations to evaluate. Default is 50.
+        cutoff_time (int, optional): Max time per evaluation in seconds. Default is 60.
+        evaluator_ls (list, optional): Evaluation metrics or scoring functions.
+
+    Returns:
+        None: The function does not return a value; it triggers side-effects like logging and result posting.
+
+    Raises:
+        Exception: Logs and swallows any exceptions that occur during execution.
+    """
+
     logger.info(
         f"[AutoML][{job_id}] Incoming job | dataset_name={dataset_name}, "
         f"n_evaluations={n_evaluations}, cutoff_time={cutoff_time}"
@@ -39,7 +67,8 @@ def run_autocluster_job(
 
         logger.debug(f"[AutoML][{job_id}] Preparing fit params")
         fit_params = prepare_fit_params(
-            df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, cutoff_time, n_evaluations
+            df, columns, clustering_algorithms, dim_reduction_algorithms, evaluator_ls, 
+            cutoff_time, n_evaluations, clustering_num, min_proportion, min_relative_proportion
         )
 
         started_timestamp = datetime.now(TIMEZONE).isoformat()
@@ -58,10 +87,24 @@ def run_autocluster_job(
 
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Unhandled error during AutoML job {e}")
-        return None
+        raise e
 
 
 if __name__ == "__main__":
+    """
+    Script entry point to execute an AutoML clustering job from the command line.
+
+    Expects the following command-line arguments:
+        1. job_id (str)
+        2. dataset_name (str)
+        3. columns (JSON-encoded list)
+        4. created_timestamp (str)
+        5. optional_params (JSON-encoded dict; optional)
+
+    Example usage:
+        python automl_worker.py <job_id> <dataset_name> '<columns_json>' <created_timestamp> '<optional_params_json>'
+    """
+    
     try:
         job_id = sys.argv[1]
         dataset_name = sys.argv[2]
@@ -77,7 +120,7 @@ if __name__ == "__main__":
             f"optional_params={optional_params}"
         )
 
-        run_autocluster_job(
+        result = run_autocluster_job(
             job_id=job_id,
             dataset_name=dataset_name,
             columns=columns,
@@ -85,5 +128,12 @@ if __name__ == "__main__":
             **optional_params,
         )
 
+        if result:
+            print(f"[AutoML][{job_id}] Clustering failed: {result}")
+            sys.exit(1)
+        else:
+            print(f"[AutoML][{job_id}] Clustering completed successfully.")
+
     except Exception as e:
         logger.exception(f"[AutoML][{job_id}] Exception in __main__ block {e}")
+        sys.exit(1)
