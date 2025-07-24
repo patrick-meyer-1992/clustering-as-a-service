@@ -13,6 +13,8 @@ from clustering import wrappers
 from clustering.preprocessing_params import PreProcessingParams
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from minio import Minio
+from minio.error import S3Error
 from pydantic import BaseModel, Field
 from pymongo import AsyncMongoClient
 from utils.config import TIMEZONE
@@ -36,6 +38,9 @@ The API supports:
 - AutoML clustering optimization
 """
 
+MINIO_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME")
+FLOWER_URL = os.getenv("FLOWER_URL")
+
 app = FastAPI(
     title="Clustering as a Service API",
     description=description,
@@ -50,7 +55,17 @@ ALGORITHM_MAP = {
 }
 algorithms = [backend_name for backend_name in ALGORITHM_MAP]
 
-FLOWER_URL = os.getenv("FLOWER_URL")
+
+async def get_minio_client():
+    MINIO_URL = os.getenv("MINIO_URL")
+    MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+    MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+    client = Minio(MINIO_URL, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+    # Ensure the bucket exists
+    if not client.bucket_exists(MINIO_BUCKET_NAME):
+        client.make_bucket(MINIO_BUCKET_NAME)
+    yield client
 
 
 async def get_mongodb():
@@ -72,14 +87,7 @@ async def get_mongodb():
     MONGODB_HOST = os.getenv("MONGODB_HOST")
     MONGODB_PORT = os.getenv("MONGODB_PORT")
 
-    # For testing purposes, you can set MONGODB_URL in your environment variables
-    MONGODB_URL = os.getenv("MONGODB_URL", None)
-
-    if MONGODB_URL:
-        mongodb_client = AsyncMongoClient(MONGODB_URL)
-        print(f"Using MongoDB URL: {MONGODB_URL}")
-    else:
-        mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
+    mongodb_client = AsyncMongoClient(f"mongodb://{MONGODB_HOST}:{MONGODB_PORT}")
 
     mongodb_database = mongodb_client.get_database(MONGODB_DB)
     try:
@@ -165,7 +173,7 @@ async def get_metadata(
 @app.get("/dataset/{dataset_name}", response_class=StreamingResponse)
 async def get_dataset(
     dataset_name: str,
-    mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ):
     """
     Download a dataset as a CSV file.
@@ -180,16 +188,13 @@ async def get_dataset(
     - **HTTPException**: 404 if dataset not found, 500 for server errors
     """
 
-    # Retrieve the dataset from mongoDB
-    data_collection = mongodb_database.get_collection("data")
-    dataset = await data_collection.find_one({"dataset_name": dataset_name}, {"_id": 0, "data": 1})
-    print(f"Retrieved dataset: {dataset_name}")
-
-    if not dataset:
+    # Fetch the dataset from MinIO
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, dataset_name)
+    except S3Error:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Erstelle einen StreamingResponse für die CSV-Daten
-    file_stream = io.StringIO(dataset["data"])
+    file_stream = io.StringIO(dataset.read().decode("utf-8"))
     return StreamingResponse(
         file_stream,
         media_type="text/csv",
@@ -236,6 +241,7 @@ class DatasetPutResponse(BaseModel):
 async def put_dataset(
     file: UploadFile = File(description="The CSV file to upload", default=...),
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ):
     """
     Upload a new dataset from a CSV file.
@@ -270,36 +276,49 @@ async def put_dataset(
     exists = await data_collection.find_one({"dataset_name": file.filename})
     if exists:
         raise HTTPException(status_code=409, detail="Dataset with this name already exists.")
+
+    content = await file.read()
+
+    # Parse the CSV file to extract column names
     try:
-        content = await file.read()
-
-        # Parse the CSV file to extract column names
-        try:
-            df = pd.read_csv(io.BytesIO(content))
-            columns = [
-                {"name": col, "allowed_types": type_mapping.get(str(dtype))}
-                for col, dtype in df.dtypes.items()
-                if type_mapping[str(dtype)] is not None
-            ]
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
-
+        df = pd.read_csv(io.BytesIO(content))
+        columns = [
+            {"name": col, "allowed_types": type_mapping.get(str(dtype))}
+            for col, dtype in df.dtypes.items()
+            if type_mapping[str(dtype)] is not None
+        ]
         # Convert to Numpy array and validate
         validate_data(df.to_numpy())
-
-        # Store the dataset and metadata in MongoDB
-        await data_collection.insert_one(
-            {
-                "dataset_name": file.filename,
-                "content_type": file.content_type,
-                "size": len(content),
-                "columns": columns,
-                "data": content.decode("utf-8"),  # Store the CSV content as a string
-            }
-        )
-        return {"dataset_name": file.filename, "columns": columns}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}") from e
+        raise HTTPException(status_code=400, detail=f"Invalid CSV file: {e}") from e
+
+    # Store the dataset and metadata in MongoDB
+    await data_collection.insert_one(
+        {
+            "dataset_name": file.filename,
+            "content_type": file.content_type,
+            "size": len(content),
+            "columns": columns,
+        }
+    )
+
+    # If minio fails remove the dataset from MongoDB
+    try:
+        minio_client.put_object(
+            bucket_name=MINIO_BUCKET_NAME,
+            object_name=file.filename,
+            data=io.BytesIO(content),
+            length=len(content),
+            content_type=file.content_type,
+        )
+    except Exception as e:
+        await data_collection.delete_one({"dataset_name": file.filename})
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file to MinIO and therefore removed dataset from mongodb again: {e}",
+        ) from e
+
+    return {"dataset_name": file.filename, "columns": columns}
 
 
 class DatasetDeleteResponse(BaseModel):
@@ -324,30 +343,42 @@ class DatasetDeleteResponse(BaseModel):
 async def delete_dataset(
     dataset_name: str,
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> DatasetDeleteResponse:
     """
-    Delete a dataset and all associated clustering results.
+    Delete a dataset from mongoDB and all results associated with it.
 
     Args:
-    - **dataset_name**: Name of the dataset to delete
+    - **dataset_name**: The name of the dataset to delete.
 
     Returns:
-    - **DatasetDeleteResponse**: Deleted dataset name and associated job IDs
+    - **DatasetDeleteResponse**: Response containing the dataset name and associated job IDs
 
     Raises:
-    - **HTTPException**: 404 if dataset not found
+    - **HTTPException**:
+        - 404 if dataset not found
+        - 500 for server errors
     """
+    # Delete the dataset from mongoDB
     data_collection = mongodb_database.get_collection("data")
     result_collection = mongodb_database.get_collection("results")
+
+    exists = await data_collection.find_one({"dataset_name": dataset_name})
+    if not exists:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
     # Get all job IDs associated with the dataset
     jobs = await result_collection.find({"dataset_name": dataset_name}, {"_id": 0, "job_id": 1}).to_list(length=None)
     await result_collection.delete_many({"dataset_name": dataset_name})
-    result = await data_collection.delete_one({"dataset_name": dataset_name})
+    await data_collection.delete_one({"dataset_name": dataset_name})
 
-    if result.deleted_count == 1:
-        return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
-    else:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    # Delete the dataset from MinIO
+    try:
+        minio_client.remove_object(MINIO_BUCKET_NAME, dataset_name)
+    except S3Error as e:
+        print(f"Error deleting object from MinIO. It still got deleted from mongoDB: {e}")
+
+    return DatasetDeleteResponse(dataset_name=dataset_name, job_ids=[job["job_id"] for job in jobs])
 
 
 class DatasetGetResponse(BaseModel):
@@ -545,7 +576,7 @@ class JobsGetResponse(BaseModel):
 @app.get("/jobs/")
 async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetResponse]:
     """
-    Get an overview of all clustering jobs and their current status.
+    Returns an overview of all clustering jobs and their current status.
 
     Returns:
         **list[JobsGetResponse]**: List of jobs with metadata and Celery status
@@ -566,8 +597,7 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
     response = requests.get(f"{FLOWER_URL}/api/tasks")
 
     if response.status_code != 200:
-        print(f"Error fetching jobs from Flower: {response.text}")
-        raise HTTPException(status_code=500, detail="Error fetching jobs from Flower")
+        raise HTTPException(status_code=500, detail=f"Error fetching jobs from Flower: {response.text}")
 
     flower_jobs = list()
     for job_id in response.json():
@@ -578,14 +608,28 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
         flower_job["job_id"] = job_id
         flower_job["status"] = job.get("state")
         if job.get("name") == "automl_worker.run_autocluster":
-            flower_job["clustering_algorithm"] = "AutoML"
-            flower_job["dataset_name"] = ast.literal_eval(job.get("kwargs"))["dataset_name"]
-            flower_job["created_timestamp"] = ast.literal_eval(job.get("kwargs"))["created_timestamp"]
+            # Flower cuts off very long kwargs, so we need to handle parsing errors
+            try:
+                kwargs = ast.literal_eval(job.get("kwargs"))
+                flower_job["clustering_algorithm"] = "AutoML"
+                flower_job["dataset_name"] = kwargs["dataset_name"]
+                flower_job["created_timestamp"] = kwargs["created_timestamp"]
+            except (ValueError, SyntaxError) as e:
+                logger.error(f"Error parsing AutoML job parameters: {e}")
+                flower_job["created_timestamp"] = datetime.now(TIMEZONE).isoformat()
+                flower_job["clustering_algorithm"] = "AutoML"
+                flower_job["dataset_name"] = "Unknown"
         else:
-            args = ast.literal_eval(job.get("args"))
-            flower_job["clustering_algorithm"] = args[-2]
-            flower_job["dataset_name"] = args[0]
-            flower_job["created_timestamp"] = args[-3]
+            try:
+                args = ast.literal_eval(job.get("args"))
+                flower_job["clustering_algorithm"] = args[-2]
+                flower_job["dataset_name"] = args[0]
+                flower_job["created_timestamp"] = args[-3]
+            except (ValueError, SyntaxError) as e:
+                logger.error(f"Error parsing job parameters: {e}")
+                flower_job["created_timestamp"] = datetime.now(TIMEZONE).isoformat()
+                flower_job["clustering_algorithm"] = "Unknown"
+                flower_job["dataset_name"] = "Unknown"
         flower_jobs.append(flower_job)
 
     result = sorted(
@@ -595,34 +639,12 @@ async def get_jobs(mongodb_database=Depends(get_mongodb)) -> list[JobsGetRespons
     )
     return result
 
-    try:
-        results_collection = mongodb_database.get_collection("results")
-        jobs = await results_collection.find({}, {"_id": 0}).to_list(length=1000)
-        job_list = []
-        for job in jobs:
-            job_id = job.get("job_id")
-            celery_status = None
-            if job_id:
-                task = celery.AsyncResult(job_id)
-                celery_status = task.status
-            job_list.append(
-                JobsGetResponse(
-                    job_id=job_id,
-                    dataset_name=job.get("dataset_name"),
-                    created_timestamp=job.get("created_timestamp"),
-                    clustering_algorithm=job.get("clustering_algorithm"),
-                    status=celery_status,
-                )
-            )
-        return job_list
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing jobs: {e}") from e
-
 
 @app.get("/result/{job_id}/table")
 async def get_result_table(
     job_id: str,
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> dict[str, Any]:
     """
     Get clustering results as a table with original data and cluster labels.
@@ -638,14 +660,17 @@ async def get_result_table(
     """
 
     result_collection = mongodb_database.get_collection("results")
-    data_collection = mongodb_database.get_collection("data")
     result = await result_collection.find_one({"job_id": job_id})
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
 
-    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-    df = pd.read_csv(io.StringIO(dataset["data"]))
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, result.get("dataset_name"))
+    except S3Error:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(io.StringIO(dataset.read().decode("utf-8")))
     df["labels"] = result.get("labels", [])
 
     return df.to_dict(orient="dict")
@@ -706,6 +731,7 @@ async def get_result_graph(
         title="The column to use for the y-axis. Set only in combination with x_column",
     ),
     mongodb_database=Depends(get_mongodb),
+    minio_client=Depends(get_minio_client),
 ) -> dict[str, Any]:
     """
     Generate a 2D scatter plot visualization of clustering results.
@@ -730,22 +756,26 @@ async def get_result_graph(
     """
 
     result_collection = mongodb_database.get_collection("results")
-    data_collection = mongodb_database.get_collection("data")
 
     result = await result_collection.find_one({"job_id": job_id})
     if not result:
         raise HTTPException(status_code=404, detail=f"Result not found for given job_id: {job_id}")
 
-    dataset = await data_collection.find_one({"dataset_name": result.get("dataset_name")}, {"_id": 0, "data": 1})
-    df = pd.read_csv(io.StringIO(dataset["data"]))
+    try:
+        dataset = minio_client.get_object(MINIO_BUCKET_NAME, result.get("dataset_name"))
+    except S3Error:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(io.StringIO(dataset.read().decode("utf-8")))
+
     labels = [str(label) for label in result.get("labels")]
 
     if df is None or labels is None or df.shape[0] == 0 or df.shape[1] < 2 or len(labels) == 0:
         raise HTTPException(status_code=400, detail="No data for plotting")
 
     if x_column is None or y_column is None:
-        x_column = result.get("columns")[0]
-        y_column = result.get("columns")[1]
+        x_column = result.get("columns")[0].get("name")
+        y_column = result.get("columns")[1].get("name")
     elif x_column not in df.columns or y_column not in df.columns:
         raise HTTPException(status_code=400, detail="Invalid x_column or y_column")
 

@@ -425,6 +425,7 @@ job_select_mode = st.radio(
 )
 
 input_job_id = ""
+selected_label = ""
 if job_select_mode == "Manuelle Eingabe":
     input_job_id = st.text_input("Job-ID eingeben", value=st.session_state.get("job_id", ""))
 elif job_select_mode == "Aktuellen Job anzeigen":
@@ -456,7 +457,7 @@ elif job_select_mode == "Job-Historie":
         # Sort the list so that the most recent jobs are first
         job_list = sorted(job_list, key=lambda job: job.get("created_timestamp"), reverse=True)
         for job in job_list:
-            algorithm_name = get_backend_frontend_mapping().get(job.get("clustering_algorithm"))
+            algorithm_name = get_backend_frontend_mapping().get(job.get("clustering_algorithm"), "Unknown")
             label = f"{job['job_id']} | {job['dataset_name']} | {algorithm_name} | {job['status']}"
             job_options.append(label)
             job_id_to_label[label] = job["job_id"]
