@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime
 from enum import Enum
-from typing import Any, Tuple
+from typing import Any
 
 import pandas as pd
 import plotly.express as px
@@ -903,12 +903,12 @@ class AutoMlClusterRequest(BaseModel):
     )
     n_evaluations: int | None = Field(default=50, description="Number of AutoML evaluations to run")
     cutoff_time: int | None = Field(default=60, description="Time limit in seconds for each AutoML evaluation")
-    clustering_num: Tuple[int, int] | None = Field(
+    clustering_num: tuple[int, int] | None = Field(
         default=None, description="Tuple specifying the range of number of clusters to try (min, max)"
     )
-    min_proportion: float | None = Field(default=0.01, description="Minimale Verhältnisgröße von Clustergrößen")
+    min_proportion: float | None = Field(default=0.01, description="Minimum ratio between cluster sizes")
     min_relative_proportion: float | str | None = Field(
-        default="default", description="Relative Mindestproportion oder 'default' für 5×min_proportion"
+        default="default", description="Minimum relative proportion or 'default' for 5×min_proportion"
     )
 
     model_config = {
@@ -931,9 +931,9 @@ class AutoMlClusterRequest(BaseModel):
                     "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
                     "n_evaluations": 20,
                     "cutoff_time": 45,
-                    "clustering_num": [1,10],
+                    "clustering_num": [1, 10],
                     "min_proportion": 0.01,
-                    "min_relative_proportion": "default"
+                    "min_relative_proportion": "default",
                 }
             ]
         }
@@ -1008,7 +1008,7 @@ async def start_automl(req: AutoMlClusterRequest, mongodb_database=Depends(get_m
             "cutoff_time": req.cutoff_time,
             "clustering_num": req.clustering_num,
             "min_proportion": req.min_proportion,
-            "min_relative_proportion": req.min_relative_proportion
+            "min_relative_proportion": req.min_relative_proportion,
         }
 
         job = celery.send_task("automl_worker.run_autocluster", kwargs=task_kwargs)
