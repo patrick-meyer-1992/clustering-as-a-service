@@ -17,6 +17,8 @@ POST /automl/cluster/
 
 Dabei wird ein JSON-Request gesendet, das die zu analysierenden Spalten und weitere optionale Einstellungen enthält.
 Beispiel-Request:
+
+```json
 {
   "dataset_name": "iris.csv",
   "columns": [
@@ -38,6 +40,8 @@ Beispiel-Request:
   "min_proportion": 0.01,
   "min_relative_proportion": "default"
 }
+```
+
 Parameterbeschreibung:
 | Parameter                  | Typ               | Beschreibung                                                                   |
 | -------------------------- | ----------------- | ------------------------------------------------------------------------------ |
