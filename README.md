@@ -6,6 +6,52 @@ Die Anwendung besteht aus mehreren skalierbaren Microservices, die auf Servern d
 ## Clustering-Algorithmen
 
 ## AutoML
+Die AutoML-Komponente ermöglicht es, automatisch geeignete Clustering-Konfigurationen für einen gegebenen Datensatz zu finden. Dazu werden verschiedene Clustering-Algorithmen, Parameterkombinationen und Evaluationsmetriken ausprobiert. Die vielversprechendsten Ergebnisse werden anschließend bereitgestellt.
+Die Logik basiert auf dem [autocluster](https://github.com/wywongbd/autocluster) Projekt von Wong et al. Dieses Projekt verfolgt einen randomisierten Ansatz zur automatisierten Clustering-Konfiguration und kombiniert dabei mehrere Clustering-Verfahren, Dimensionalitätsreduktionen und Metriken. Es wurde um ein Frontend erweitert und einige Parameter wurden parametrisierbar gemacht.
+
+API-Endpunkt: AutoML starten
+
+Ein AutoML-Job wird über folgenden Endpunkt gestartet:
+
+POST /automl/cluster/
+
+Dabei wird ein JSON-Request gesendet, das die zu analysierenden Spalten und weitere optionale Einstellungen enthält.
+Beispiel-Request:
+{
+  "dataset_name": "iris.csv",
+  "columns": [
+    {
+      "name": "sepal.length",
+      "type": "numeric"
+    },
+    {
+      "name": "sepal.width",
+      "type": "numeric"
+    }
+  ],
+  "clustering_algorithms": ["KMeans", "DBSCAN"],
+  "dim_reduction_algorithms": ["PCA"],
+  "evaluator_ls": ["silhouetteScore", "calinskiHarabaszScore"],
+  "n_evaluations": 20,
+  "cutoff_time": 45,
+  "clustering_num": [1, 10],
+  "min_proportion": 0.01,
+  "min_relative_proportion": "default"
+}
+Parameterbeschreibung:
+| Parameter                  | Typ               | Beschreibung                                                                   |
+| -------------------------- | ----------------- | ------------------------------------------------------------------------------ |
+| `dataset_name`             | string            | Name eines zuvor hochgeladenen Datensatzes                                     |
+| `columns`                  | List\[Object]     | Spaltenauswahl, inkl. Typ (`numeric` oder `categorical`)                       |
+| `clustering_algorithms`    | List\[string]     | Liste der Clustering-Algorithmen (z. B. `KMeans`, `DBSCAN`)                    |
+| `dim_reduction_algorithms` | List\[string]     | Liste der Verfahren zur Dimensionsreduktion (z. B. `PCA`, optional)            |
+| `evaluator_ls`             | List\[string]     | Evaluationsmetriken, z. B. `silhouetteScore`, `calinskiHarabaszScore`          |
+| `n_evaluations`            | int               | Anzahl zufälliger Konfigurationen, die getestet werden                         |
+| `cutoff_time`              | int (Sekunden)    | Maximal erlaubte Laufzeit des AutoML-Prozesses                                 |
+| `clustering_num`           | \[int, int]       | Intervall der Clusteranzahl (z. B. `[1, 10]`) für Algorithmen mit `n_clusters` |
+| `min_proportion`           | float             | Minimale absolute Größe eines Clusters (z. B. 0.01 → mind. 1 %)                |
+| `min_relative_proportion`  | float oder string | Minimale relative Größe eines Clusters (z. B. 0.05 oder `"default"`)           |
+
 
 ## Zugang zu CaaS bei FUH
 Um diese Anwendung zu nutzen, sind einige Konfiguration vorzunehmen.
