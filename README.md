@@ -9,11 +9,13 @@ Die Anwendung besteht aus mehreren skalierbaren Microservices, die auf Servern d
 Die AutoML-Komponente ermöglicht es, automatisch geeignete Clustering-Konfigurationen für einen gegebenen Datensatz zu finden. Dazu werden verschiedene Clustering-Algorithmen, Parameterkombinationen und Evaluationsmetriken ausprobiert. Die vielversprechendsten Ergebnisse werden anschließend bereitgestellt.
 Die Logik basiert auf dem [autocluster](https://github.com/wywongbd/autocluster) Projekt von Wong et al. Dieses Projekt verfolgt einen randomisierten Ansatz zur automatisierten Clustering-Konfiguration und kombiniert dabei mehrere Clustering-Verfahren, Dimensionalitätsreduktionen und Metriken. Es wurde um ein Frontend erweitert und einige Parameter wurden parametrisierbar gemacht.
 
-API-Endpunkt: AutoML starten
+# API-Endpunkt: AutoML starten
 
 Ein AutoML-Job wird über folgenden Endpunkt gestartet:
 
+```
 POST /automl/cluster/
+```
 
 Dabei wird ein JSON-Request gesendet, das die zu analysierenden Spalten und weitere optionale Einstellungen enthält.
 Beispiel-Request:
