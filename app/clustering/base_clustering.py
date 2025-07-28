@@ -69,15 +69,6 @@ class BaseClustering(ABC):
             print(f"Error loading data: {str(e)}")
             raise
 
-    def validate_params_sklearn(self):
-        try:
-            cls = self.get_sklearn_estimator_class()
-            model = cls(**self.clustering_params)
-            dummy = np.array([[0.1, 1.2], [0.3, 0.7], [1.1, 0.4], [0.0, 0.9]])
-            model.fit(dummy)
-        except Exception as e:
-            raise ValueError(f"Invalid parameters: {e}")
-
     def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
         ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
         nominal_cols = [col.get("name") for col in self.columns if col.get("type") == "nominal"]
@@ -174,5 +165,21 @@ class BaseClustering(ABC):
             if math.isnan(obj):
                 return "nan"
             return obj
+        elif isinstance(obj, np.ndarray):
+            return self._sanitize_inf(obj.tolist())
+
+        elif isinstance(obj, np.floating):
+            if np.isinf(obj):
+                return "inf" if obj > 0 else "-inf"
+            if np.isnan(obj):
+                return "nan"
+            return float(obj)
+
+        elif isinstance(obj, np.integer):
+            return int(obj)
+
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+
         else:
             return obj

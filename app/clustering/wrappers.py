@@ -2,6 +2,7 @@ import collections
 
 from sklearn.cluster import (
     DBSCAN,
+    HDBSCAN,
     OPTICS,
     AffinityPropagation,
     AgglomerativeClustering,
@@ -34,7 +35,7 @@ class AffinityPropagationWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running AffinityPropagation with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = AffinityPropagation(**self.clustering_params)
             model.fit(data)
 
@@ -73,7 +74,7 @@ class AgglomerativeClusteringWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running Agglomerative with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = AgglomerativeClustering(**self.clustering_params)
             model.fit(data)
             labels = model.fit_predict(data)
@@ -111,6 +112,15 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
 
     def run(self, data):
         try:
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
+
+            reg_covar = self.clustering_params.get("reg_covar")
+            if isinstance(reg_covar, str):
+                try:
+                    self.clustering_params["reg_covar"] = float(reg_covar)
+                except ValueError:
+                    raise RuntimeError(f"Invalid reg_covar value: {reg_covar}")
+
             model = BayesianGaussianMixture(**self.clustering_params)
             model.fit(data)
 
@@ -141,7 +151,6 @@ class BIRCHWrapper(BaseClustering):
 
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
-        self.clustering_params.update(clustering_params)
 
     @staticmethod
     def get_default_params():
@@ -153,7 +162,7 @@ class BIRCHWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running BIRCH with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = Birch(**self.clustering_params)
             model.fit(data)
 
@@ -192,7 +201,7 @@ class BisectingKMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running BisectingKMeans with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = BisectingKMeans(**self.clustering_params)
             model.fit(data)
 
@@ -229,14 +238,18 @@ class DBSCANWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running DBSCAN with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = DBSCAN(**self.clustering_params)
             model.fit(data)
+
+            labels = model.labels_
+            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
 
             result = {
                 "labels": model.labels_.tolist(),
                 "n_clusters": len(set(model.labels_)) - (1 if -1 in model.labels_ else 0),
                 "n_noise": list(model.labels_).count(-1),
+                "cluster_sizes": dict(cluster_sizes),
             }
 
             return result
@@ -262,6 +275,7 @@ class GaussianMixtureWrapper(BaseClustering):
 
     def run(self, data):
         try:
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = GaussianMixture(**self.clustering_params)
             model.fit(data)
 
@@ -285,6 +299,46 @@ class GaussianMixtureWrapper(BaseClustering):
             raise RuntimeError(f"{self.backend_name} failed: {e}") from e
 
 
+class HDBSCANWrapper(BaseClustering):
+    backend_name = "hdbscan"
+    frontend_name = "HDBSCAN"
+
+    def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
+        super().__init__(dataset_name, columns, preprocessing_params, **clustering_params)
+
+    @staticmethod
+    def get_default_params():
+        return HDBSCAN().get_params()
+
+    @staticmethod
+    def get_sklearn_estimator_class():
+        return HDBSCAN
+
+    def run(self, data):
+        try:
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
+            model = HDBSCAN(**self.clustering_params)
+            model.fit(data)
+
+            labels = model.labels_
+            cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
+
+            result = {
+                "labels": labels.tolist(),
+                "n_clusters": len([label for label in set(labels) if label >= 0]),  # exclude -1, -2, -3
+                "n_noise": list(labels).count(-1),
+                "cluster_sizes": dict(cluster_sizes),
+                "probabilities": model.probabilities_.tolist() if hasattr(model, "probabilities_") else None,
+                "centroids": model.centroids_.tolist() if hasattr(model, "centroids_") else None,
+                "medoids": model.medoids_.tolist() if hasattr(model, "medoids_") else None,
+            }
+
+            return result
+
+        except Exception as e:
+            raise RuntimeError(f"{self.backend_name} failed: {e}") from e
+
+
 class KMeansWrapper(BaseClustering):
     backend_name = "kmeans"
     frontend_name = "KMeans"
@@ -302,7 +356,7 @@ class KMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running KMeans with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = KMeans(**self.clustering_params)
             model.fit(data)
 
@@ -340,7 +394,7 @@ class MeanShiftWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running MeanShift with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = MeanShift(**self.clustering_params)
             model.fit(data)
 
@@ -377,7 +431,7 @@ class MiniBatchKMeansWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running MiniBatchKMeans with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = MiniBatchKMeans(**self.clustering_params)
             model.fit(data)
 
@@ -408,7 +462,7 @@ class OPTICSWrapper(BaseClustering):
     @staticmethod
     def get_default_params():
         params = OPTICS().get_params()
-        params["max_eps"] = 10
+        params.setdefault("max_eps", 10)
         return params
 
     @staticmethod
@@ -417,7 +471,7 @@ class OPTICSWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running OPTICS with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = OPTICS(**self.clustering_params)
             model.fit(data)
 
@@ -457,7 +511,7 @@ class SpectralClusteringWrapper(BaseClustering):
 
     def run(self, data):
         try:
-            print(f"Running Spectral clustering with clustering_params: {self.clustering_params}")
+            print(f"Running {self.frontend_name} with clustering_params: {self.clustering_params}")
             model = SpectralClustering(**self.clustering_params)
             model.fit(data)
 
