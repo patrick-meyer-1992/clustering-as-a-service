@@ -462,7 +462,7 @@ class OPTICSWrapper(BaseClustering):
     @staticmethod
     def get_default_params():
         params = OPTICS().get_params()
-        params.setdefault("max_eps", 10)
+        params["max_eps"] = 10
         return params
 
     @staticmethod
