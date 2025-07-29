@@ -45,9 +45,7 @@ class BaseClustering(ABC):
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         self.clustering_params = clustering_params
         self.dataset_name = dataset_name
-        # TODO: @Ersel: Hier wird jetzt ein dict statt einer Liste erwartet.
-        # Dieses dict kann für die Codierung der Spalten verwendet werden.
-        self.columns: dict[str, str] = columns
+        self.columns: list[dict[str, str]] = columns
         self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
@@ -63,7 +61,7 @@ class BaseClustering(ABC):
             response = requests.get(url)
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
-            # Nur ausgewählte Spalten verwenden
+            # Use only selected columns
             return df[[col.get("name") for col in self.columns]]
         except Exception as e:
             print(f"Error loading data: {str(e)}")
@@ -122,7 +120,7 @@ class BaseClustering(ABC):
             labels = result.pop("labels")
 
             payload = {
-                "job_id": job_id,  # Hier verwenden wir den übergebenen job_id Parameter
+                "job_id": job_id,
                 "dataset_name": self.dataset_name,
                 "columns": self.columns,
                 "created_timestamp": created_timestamp,
