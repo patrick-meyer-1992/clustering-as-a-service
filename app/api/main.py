@@ -1046,7 +1046,24 @@ async def get_default_algorithm_parameters(
     if not algorithm:
         raise HTTPException(status_code=404, detail="Algorithm not found")
 
-    return {"clustering_params": algorithm.get_default_params()}
+    params = algorithm.get_default_params()
+
+    # Convert infinity values to string representation for JSON serialization
+    def convert_inf_values(obj):
+        if isinstance(obj, dict):
+            return {k: convert_inf_values(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_inf_values(item) for item in obj]
+        elif obj == float("inf"):
+            return "inf"
+        elif obj == float("-inf"):
+            return "-inf"
+        else:
+            return obj
+
+    converted_params = convert_inf_values(params)
+
+    return {"clustering_params": converted_params}
 
 
 @app.get("/algorithms/")
