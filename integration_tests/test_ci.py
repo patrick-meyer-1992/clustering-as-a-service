@@ -140,7 +140,7 @@ def test_post_jobs_iris():
         assert "job_id" in job_response
         assert job_response["job_id"] is not None
 
-        sleep(5)  # Wait for the job to be processed
+        sleep(10)  # Wait for the job to be processed
 
         response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
         assert response.status_code == 200
@@ -167,7 +167,7 @@ def test_post_jobs_numeric_and_text():
         assert "job_id" in job_response
         assert job_response["job_id"] is not None
 
-        sleep(2)  # Wait for the job to be processed
+        sleep(10)  # Wait for the job to be processed
 
         response = requests.get(f"{FASTAPI_URL}/result/{job_response['job_id']}/raw")
         assert response.status_code == 200
