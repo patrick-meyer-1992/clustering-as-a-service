@@ -45,9 +45,7 @@ class BaseClustering(ABC):
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
         self.clustering_params = clustering_params
         self.dataset_name = dataset_name
-        # TODO: @Ersel: Hier wird jetzt ein dict statt einer Liste erwartet.
-        # Dieses dict kann für die Codierung der Spalten verwendet werden.
-        self.columns: dict[str, str] = columns
+        self.columns: list[dict[str, str]] = columns
         self.preprocessing_params = preprocessing_params
         self.name = "Base Clustering"  # Default name
 
@@ -63,20 +61,11 @@ class BaseClustering(ABC):
             response = requests.get(url)
             response.raise_for_status()
             df = pd.read_csv(io.BytesIO(response.content))
-            # Nur ausgewählte Spalten verwenden
+            # Use only selected columns
             return df[[col.get("name") for col in self.columns]]
         except Exception as e:
             print(f"Error loading data: {str(e)}")
             raise
-
-    def validate_params_sklearn(self):
-        try:
-            cls = self.get_sklearn_estimator_class()
-            model = cls(**self.clustering_params)
-            dummy = np.array([[0.1, 1.2], [0.3, 0.7], [1.1, 0.4], [0.0, 0.9]])
-            model.fit(dummy)
-        except Exception as e:
-            raise ValueError(f"Invalid parameters: {e}")
 
     def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
         ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
@@ -131,7 +120,7 @@ class BaseClustering(ABC):
             labels = result.pop("labels")
 
             payload = {
-                "job_id": job_id,  # Hier verwenden wir den übergebenen job_id Parameter
+                "job_id": job_id,
                 "dataset_name": self.dataset_name,
                 "columns": self.columns,
                 "created_timestamp": created_timestamp,
@@ -174,5 +163,21 @@ class BaseClustering(ABC):
             if math.isnan(obj):
                 return "nan"
             return obj
+        elif isinstance(obj, np.ndarray):
+            return self._sanitize_inf(obj.tolist())
+
+        elif isinstance(obj, np.floating):
+            if np.isinf(obj):
+                return "inf" if obj > 0 else "-inf"
+            if np.isnan(obj):
+                return "nan"
+            return float(obj)
+
+        elif isinstance(obj, np.integer):
+            return int(obj)
+
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+
         else:
             return obj

@@ -3,7 +3,6 @@ from datetime import datetime
 from clustering import wrappers
 from utils.config import TIMEZONE
 from utils.logger import setup_logger
-
 from workers.celery_conn import celery
 
 logger = setup_logger(__name__)
@@ -35,10 +34,6 @@ def run_clustering_job(
 
     clustering_class = ALGORITHM_MAP[algorithm_name]
     clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
-
-    # Clustering parameters validation
-    # Temporarily removed because it throws false positive errors when n_clusters > 4
-    # clustering.validate_params_sklearn()
 
     data = clustering.load_data()
 
