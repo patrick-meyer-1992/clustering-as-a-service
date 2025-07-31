@@ -310,9 +310,12 @@ if st.session_state["dataset_name"]:
             st.error("Minimale Clusteranzahl darf nicht größer sein als maximale Clusteranzahl.")
         clustering_num = (min_clusters, max_clusters)
 
-
         min_proportion = st.number_input(
-            "Minimale Clustergrößenverhältnis (minimale Clustergröße / maximale Clustergröße)", min_value=0.0, max_value=1.0, value=0.01, step=0.01
+            "Minimales Clustergrößenverhältnis (minimale Clustergröße / maximale Clustergröße)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.01,
+            step=0.01,
         )
 
         min_relative_proportion = None
@@ -381,7 +384,7 @@ if st.session_state["dataset_name"]:
                 "cutoff_time": cutoff_time,
                 "clustering_num": clustering_num,
                 "min_proportion": min_proportion,
-                "min_relative_proportion": min_relative_proportion
+                "min_relative_proportion": min_relative_proportion,
             }
 
         else:
