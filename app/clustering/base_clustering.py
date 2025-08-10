@@ -322,13 +322,12 @@ class BaseClustering(ABC):
             )
 
             if response.status_code != 200:
-                print(f"Error saving results: {response.text}")
-                return None
+                raise RuntimeError(f"Failed to save results: {response.text}")
 
             return response.json()
         except Exception as e:
             print(f"Error in save_results: {str(e)}")
-            return None
+            raise
 
     def _sanitize_inf(self, obj):
         """
