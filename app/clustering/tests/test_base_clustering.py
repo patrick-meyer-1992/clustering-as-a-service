@@ -137,23 +137,25 @@ def test_save_results_failure(mock_post, dummy_instance):
     mock_post.return_value.text = "Internal Server Error"
 
     result = {"labels": [0, 1], "some_metric": 0.1}
-    response = dummy_instance.save_results(
-        result, job_id="job_fail", created_timestamp="2025-01-01T00:00:00Z", started_timestamp="2025-01-01T00:01:00Z"
-    )
-
-    assert response is None
+    with pytest.raises(RuntimeError, match="Internal Server Error"):
+        dummy_instance.save_results(
+            result,
+            job_id="job_fail",
+            created_timestamp="2025-01-01T00:00:00Z",
+            started_timestamp="2025-01-01T00:01:00Z",
+        )
 
 
 @patch("app.clustering.base_clustering.requests.post", side_effect=Exception("Connection failed"))
 def test_save_results_exception(mock_post, dummy_instance):
     result = {"labels": [0, 1], "some_metric": 0.1}
-    response = dummy_instance.save_results(
-        result,
-        job_id="job_exception",
-        created_timestamp="2025-01-01T00:00:00Z",
-        started_timestamp="2025-01-01T00:01:00Z",
-    )
-    assert response is None
+    with pytest.raises(RuntimeError):
+        dummy_instance.save_results(
+            result,
+            job_id="job_fail",
+            created_timestamp="2025-01-01T00:00:00Z",
+            started_timestamp="2025-01-01T00:01:00Z",
+        )
 
 
 @patch("app.clustering.base_clustering.requests.get")

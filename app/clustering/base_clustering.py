@@ -326,8 +326,7 @@ class BaseClustering(ABC):
 
             return response.json()
         except Exception as e:
-            print(f"Error in save_results: {str(e)}")
-            raise
+            raise RuntimeError(f"Failed to save results: {str(e)}")
 
     def _sanitize_inf(self, obj):
         """
