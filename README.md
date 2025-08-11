@@ -31,10 +31,11 @@ Vor der Anwendung eines Clustering-Verfahrens kann der Datensatz optional vorver
 - **Imputation** (mittels Mittelwert oder Median)  
 - **Outlier Removal** (Z-Score oder IQR-basiert)  
 - **Feature Selection** (Konstant oder Niedrigvarianz)  
-- **Skalierung** (Standard, MinMax, Robust, MaxAbs, oder automatisch)  
+- **Skalierung** (Standard, MinMax, Robust, MaxAbs, oder automatisch)
+- **Transformation** (Power- oder Quantile-Transformation)  
 - **Normalisierung** (L1, L2, Max-Norm)  
 - **Dimensionale Reduktion** via PCA  
-- **Transformation** (Power- oder Quantile-Transformation)
+
 
 Alle Schritte sind individuell konfigurierbar über ein separates Parameterobjekt und können bei Bedarf deaktiviert werden.
 
