@@ -57,9 +57,9 @@ class PreprocessingPipeline:
         2. Outlier removal (optional)
         3. Feature selection (optional)
         4. Scaling
-        5. Normalization (optional)
-        6. Dimensionality reduction via PCA (optional)
-        7. Final transformation (quantile or power, optional)
+        5. Distribution transform (quantile or power, optional)
+        6. Normalization (optional)
+        7. Dimensionality reduction via PCA (optional)
 
         Parameters
         ----------
@@ -76,9 +76,10 @@ class PreprocessingPipeline:
         X_proc = self._remove_outliers(X_proc)
         X_proc = self._feature_select(X_proc)
         X_proc = self._scale(X_proc)
+        X_proc = self._post_transform(X_proc)
         X_proc = self._normalize(X_proc)
         X_proc = self._reduce_dim(X_proc)
-        X_proc = self._post_transform(X_proc)
+
         return X_proc
 
     # --- step helpers -----------------------------------------------------
