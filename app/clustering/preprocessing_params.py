@@ -4,6 +4,16 @@ from pydantic import BaseModel, Field
 
 
 class PreProcessingParams(BaseModel):
+    """
+    Defines configurable parameters for the preprocessing pipeline.
+
+    This schema includes options for imputation, scaling, normalization, outlier removal,
+    dimensionality reduction, feature selection, and optional transformations. These parameters
+    are used by the PreprocessingPipeline to prepare data before clustering.
+
+    Each field corresponds to a specific step and controls whether it is applied and how.
+    """
+
     scaler: Literal["auto", "standard", "minmax", "robust", "maxabs"] = Field(
         title="The type of scaler to use for preprocessing",
         default="auto",
@@ -27,6 +37,7 @@ class PreProcessingParams(BaseModel):
     pca_components: int = Field(
         title="Number of components to keep after PCA",
         default=10,
+        ge=1,
         description="Choose the number of components to keep after PCA.",
     )
     transform_type: Literal["quantile", "power", None] = Field(
@@ -47,6 +58,7 @@ class PreProcessingParams(BaseModel):
     outlier_threshold: float = Field(
         title="Threshold for outlier detection",
         default=3.0,
+        gt=0.0,
         description="Choose the threshold for outlier detection. Only used if outlier_removal is 'zscore'.",
     )
     feature_selection: Literal[None, "low_variance", "constant"] = Field(
@@ -57,6 +69,7 @@ class PreProcessingParams(BaseModel):
     variance_threshold: float = Field(
         title="Variance threshold for feature selection",
         default=0.0,
+        ge=0.0,
         description="Choose the variance threshold for feature selection. Only used if "
         "feature_selection is 'low_variance'.",
     )

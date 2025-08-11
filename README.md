@@ -4,6 +4,53 @@ Eine RESTful-API, die es ermöglicht Datensätze zu clustern und die Ergebnisse 
 Die Anwendung besteht aus mehreren skalierbaren Microservices, die auf Servern der Fernuniversität in Hagen (FUH) in einem Kubernetes Cluster betrieben werden.
 
 ## Clustering-Algorithmen
+Das Clustering-Modul dieser Anwendung stellt eine Vielzahl an gebräuchlichen Clustering-Algorithmen zur Verfügung, die durch eine einheitliche Schnittstelle gekapselt sind. Jeder Algorithmus ist in einem eigenen Wrapper implementiert, der sowohl standardisierte Qualitätsmetriken berechnet als auch algorithmenspezifische Ausgaben (z. B. Clusterzentren, Wahrscheinlichkeiten, Anzahl der Iterationen) bereitstellt.
+
+### Unterstützte Algorithmen
+
+Folgende Algorithmen stehen aktuell zur Verfügung:
+
+- **KMeans**  
+- **Mini Batch KMeans**  
+- **Bisecting KMeans**  
+- **DBSCAN**  
+- **HDBSCAN**  
+- **OPTICS**  
+- **Mean Shift**  
+- **Agglomerative Clustering**  
+- **Spectral Clustering**  
+- **Affinity Propagation**  
+- **BIRCH**  
+- **Gaussian Mixture Model (GMM)**  
+- **Bayesian Gaussian Mixture Model (BGMM)**
+
+### Preprocessing
+
+Vor der Anwendung eines Clustering-Verfahrens kann der Datensatz optional vorverarbeitet werden. Die Vorverarbeitung umfasst:
+
+- **Imputation** (mittels Mittelwert oder Median)  
+- **Outlier Removal** (Z-Score oder IQR-basiert)  
+- **Feature Selection** (Konstant oder Niedrigvarianz)  
+- **Skalierung** (Standard, MinMax, Robust, MaxAbs, oder automatisch)  
+- **Normalisierung** (L1, L2, Max-Norm)  
+- **Dimensionale Reduktion** via PCA  
+- **Transformation** (Power- oder Quantile-Transformation)
+
+Alle Schritte sind individuell konfigurierbar über ein separates Parameterobjekt und können bei Bedarf deaktiviert werden.
+
+### Ergebnisstruktur
+
+Die Ausgaben eines Clustering-Durchlaufs beinhalten:
+
+- Cluster-Labels für alle Datenpunkte  
+- Algorithmenspezifische Metadaten (z. B. Zentren, Wahrscheinlichkeiten)  
+- Qualitätsmetriken:
+  - Silhouette Score  
+  - Davies-Bouldin Score  
+  - Calinski-Harabasz Score  
+
+Die Ergebnisse werden zusammen mit den genutzten Parametern und Zeitstempeln an den FastAPI-Backend gesendet und persistiert.
+
 
 ## AutoML
 Die AutoML-Komponente ermöglicht es, automatisch geeignete Clustering-Konfigurationen für einen gegebenen Datensatz zu finden. Dazu werden verschiedene Clustering-Algorithmen, Parameterkombinationen und Evaluationsmetriken ausprobiert. Die vielversprechendsten Ergebnisse werden anschließend bereitgestellt.
