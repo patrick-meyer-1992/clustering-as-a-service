@@ -9,6 +9,11 @@ import pandas as pd
 import pytz
 import requests
 from pydantic import ValidationError
+from sklearn.metrics import (
+    calinski_harabasz_score,
+    davies_bouldin_score,
+    silhouette_score,
+)
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 from .preprocessing_params import PreProcessingParams
@@ -39,10 +44,34 @@ DEFAULT_PREPROCESSING_PARAMS = {
 
 
 class BaseClustering(ABC):
+    """
+    Abstract base class for all clustering algorithm implementations.
+
+    This class defines the interface and shared functionality for clustering wrappers,
+    including data loading, encoding, preprocessing, result saving, and quality metric computation.
+
+    Subclasses must implement the `run` and `get_default_params` methods.
+    """
+
     frontend_name = None
     backend_name = None
 
     def __init__(self, dataset_name, columns, preprocessing_params=None, **clustering_params):
+        """
+        Initialize the clustering wrapper.
+
+        Parameters
+        ----------
+        dataset_name : str
+            The name of the dataset to load via FastAPI.
+        columns : list[dict[str, str]]
+            List of dictionaries specifying the name and type of each feature column.
+        preprocessing_params : dict, optional
+            Dictionary of preprocessing options (scaling, PCA, etc.).
+        **clustering_params : dict
+            Algorithm-specific clustering parameters.
+        """
+
         self.clustering_params = clustering_params
         self.dataset_name = dataset_name
         self.columns: list[dict[str, str]] = columns
@@ -55,6 +84,20 @@ class BaseClustering(ABC):
                 self.clustering_params[k] = v
 
     def load_data(self):
+        """
+        Fetch the dataset from the FastAPI backend using the provided dataset name.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing only the selected columns.
+
+        Raises
+        ------
+        Exception
+            If there is a problem with the network request or data loading.
+        """
+
         try:
             url = f"{FASTAPI_PROTOCOL}://{FASTAPI_HOST}:{FASTAPI_PORT}/dataset/{self.dataset_name}"
             print(f"Trying to load data from: {url}")  # Debug
@@ -68,11 +111,39 @@ class BaseClustering(ABC):
             raise
 
     def encode_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Encode categorical columns in the dataset using appropriate encoders.
+
+        - Ordinal columns are encoded with `OrdinalEncoder` using specified or inferred order.
+        - Nominal columns are encoded with `OneHotEncoder`.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The input DataFrame with raw categorical features.
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame with encoded categorical columns.
+        """
+
         ordinal_cols = [col.get("name") for col in self.columns if col.get("type") == "ordinal"]
         nominal_cols = [col.get("name") for col in self.columns if col.get("type") == "nominal"]
 
         if ordinal_cols:
-            encoder = OrdinalEncoder()
+            # Prepare user-defined categories
+            categories = []
+            for col in ordinal_cols:
+                col_info = next((c for c in self.columns if c["name"] == col), None)
+                if col_info and "order" in col_info:
+                    categories.append(col_info["order"])
+                else:
+                    # If no order is provided, fallback to default inferred ordering
+                    unique_values = sorted(df[col].dropna().unique().tolist())
+                    categories.append(unique_values)
+
+            encoder = OrdinalEncoder(categories=categories)
             df[ordinal_cols] = encoder.fit_transform(df[ordinal_cols])
 
         if nominal_cols:
@@ -87,6 +158,30 @@ class BaseClustering(ABC):
         return df
 
     def prepare_data(self, data, preprocess=True):
+        """
+        Optionally apply preprocessing pipeline to the given dataset.
+
+        If `preprocess=True`, the method initializes the `PreprocessingPipeline` using the
+        provided or default parameters, then fits and transforms the data.
+
+        Parameters
+        ----------
+        data : np.ndarray or pd.DataFrame
+            The input data to preprocess.
+        preprocess : bool, default=True
+            Whether to apply the preprocessing pipeline.
+
+        Returns
+        -------
+        np.ndarray
+            The preprocessed data.
+
+        Raises
+        ------
+        ValueError
+            If the preprocessing parameters are invalid.
+        """
+
         if not preprocess:
             return data
         try:
@@ -100,19 +195,102 @@ class BaseClustering(ABC):
     @abstractmethod
     def get_default_params() -> dict:
         """
-        Must return a dictionary of default parameters.
+        Return a dictionary of default parameters for the clustering algorithm.
+
+        This method must be implemented by each subclass.
+
+        Returns
+        -------
+        dict
+            A dictionary of default hyperparameters specific to the algorithm.
         """
+
         pass
 
     @abstractmethod
     def run(self, data):
-        # Abstract method to run the clustering algorithm
+        """
+        Execute the clustering algorithm on the given data.
+
+        This method must be implemented by each subclass to apply the specific clustering logic.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The input data on which clustering will be performed.
+
+        Returns
+        -------
+        dict
+            A dictionary containing at least the cluster labels and any additional results or metrics.
+        """
+
         pass
+
+    def compute_quality_metrics(self, data, labels):
+        """
+        Compute standard clustering quality metrics, ignoring noise labels (e.g. -1).
+
+        Metrics calculated:
+        - Silhouette Score
+        - Davies-Bouldin Score
+        - Calinski-Harabasz Score
+
+        If all labels are the same or there's only one cluster, returns None for all metrics.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The input data used for clustering.
+        labels : np.ndarray
+            Cluster labels assigned to each data point.
+
+        Returns
+        -------
+        dict
+            Dictionary containing values for 'silhouette_score', 'davies_bouldin_score',
+            and 'calinski_harabasz_score'. Metrics are None if not computable.
+        """
+
+        try:
+            filtered_data = data[labels >= 0]
+            filtered_labels = labels[labels >= 0]
+
+            if len(set(filtered_labels)) <= 1:
+                return {"silhouette_score": None, "davies_bouldin_score": None, "calinski_harabasz_score": None}
+
+            return {
+                "silhouette_score": silhouette_score(filtered_data, filtered_labels),
+                "davies_bouldin_score": davies_bouldin_score(filtered_data, filtered_labels),
+                "calinski_harabasz_score": calinski_harabasz_score(filtered_data, filtered_labels),
+            }
+        except Exception:
+            return {"silhouette_score": None, "davies_bouldin_score": None, "calinski_harabasz_score": None}
 
     def save_results(self, result, job_id, created_timestamp, started_timestamp):
         """
-        Save clustering results to FastAPI backend
+        Send clustering results and metadata to the FastAPI backend.
+
+        This method extracts the labels, packages the clustering results along with job
+        and preprocessing metadata, and sends a POST request to the backend.
+
+        Parameters
+        ----------
+        result : dict
+            Dictionary containing the clustering output. Must include a "labels" key.
+        job_id : str
+            The ID of the job for tracking purposes.
+        created_timestamp : str
+            ISO-formatted creation timestamp of the job.
+        started_timestamp : str
+            ISO-formatted timestamp when clustering began.
+
+        Returns
+        -------
+        dict or None
+            JSON response from the FastAPI backend if successful, otherwise None.
         """
+
         try:
             print(f"Saving results for job_id: {job_id}")  # Debug print
 
@@ -144,15 +322,30 @@ class BaseClustering(ABC):
             )
 
             if response.status_code != 200:
-                print(f"Error saving results: {response.text}")
-                return None
+                raise RuntimeError(f"Failed to save results: {response.text}")
 
             return response.json()
         except Exception as e:
-            print(f"Error in save_results: {str(e)}")
-            return None
+            raise RuntimeError(f"Failed to save results: {str(e)}")
 
     def _sanitize_inf(self, obj):
+        """
+        Recursively sanitize data structures by converting NaN and infinite values to strings.
+
+        This ensures compatibility with JSON serialization and avoids FastAPI errors
+        when posting payloads containing non-finite values.
+
+        Parameters
+        ----------
+        obj : any
+            Any nested structure (dict, list, numpy types) potentially containing inf/nan.
+
+        Returns
+        -------
+        any
+            A sanitized copy of the input with inf/nan replaced as strings ("inf", "-inf", "nan").
+        """
+
         if isinstance(obj, dict):
             return {k: self._sanitize_inf(v) for k, v in obj.items()}
         elif isinstance(obj, list):

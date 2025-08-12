@@ -23,25 +23,32 @@ def run_clustering_job(
     preprocessing_params,
     **clustering_params,
 ):
-    print(f"Running clustering job for {dataset_name} with algorithm {clustering_algorithm}")
+    job_id = self.request.id
+    logger.info(f"[{job_id}] Starting clustering job: {clustering_algorithm} on dataset: {dataset_name}")
+
     started_timestamp = datetime.now(TIMEZONE).isoformat()
 
-    job_id = self.request.id
+    try:
+        algorithm_name = clustering_algorithm.lower()
+        if algorithm_name not in ALGORITHM_MAP:
+            raise ValueError(f"Unsupported algorithm: {algorithm_name}")
 
-    algorithm_name = clustering_algorithm.lower()
-    if algorithm_name not in ALGORITHM_MAP:
-        raise ValueError(f"Unsupported algorithm: {algorithm_name}")
+        clustering_class = ALGORITHM_MAP[algorithm_name]
+        clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
 
-    clustering_class = ALGORITHM_MAP[algorithm_name]
-    clustering = clustering_class(dataset_name, columns, preprocessing_params, **clustering_params)
+        df = clustering.load_data()
+        df = clustering.encode_data(df)
+        data = df.to_numpy()
 
-    data = clustering.load_data()
+        data = clustering.prepare_data(data, preprocess)
 
-    # Encoding nominal or ordinal columns
-    df = clustering.encode_data(data)
-    data = df.to_numpy()
+        result = clustering.run(data)
 
-    data = clustering.prepare_data(data, preprocess)
-    result = clustering.run(data)
+        response = clustering.save_results(result, job_id, created_timestamp, started_timestamp)
 
-    clustering.save_results(result, job_id, created_timestamp, started_timestamp)
+        logger.info(f"[{job_id}] Clustering job completed successfully.")
+        return response
+
+    except Exception as e:
+        logger.error(f"[{job_id}] Clustering job failed: {str(e)}", exc_info=True)
+        raise
