@@ -49,7 +49,7 @@ class AffinityPropagationWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(model.labels_).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -100,7 +100,7 @@ class AgglomerativeClusteringWrapper(BaseClustering):
 
             labels = model.fit_predict(data)
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.fit_predict(data))
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -159,7 +159,7 @@ class BayesianGaussianMixtureWrapper(BaseClustering):
             labels = model.predict(data)
             probabilities = model.predict_proba(data)
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.predict(data))
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -211,7 +211,7 @@ class BIRCHWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -262,7 +262,7 @@ class BisectingKMeansWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -311,7 +311,7 @@ class DBSCANWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -361,7 +361,7 @@ class GaussianMixtureWrapper(BaseClustering):
             labels = model.predict(data)
             probabilities = model.predict_proba(data)
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.predict(data))
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -412,7 +412,7 @@ class HDBSCANWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -464,7 +464,7 @@ class KMeansWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -514,7 +514,7 @@ class MeanShiftWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(model.labels_).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -563,7 +563,7 @@ class MiniBatchKMeansWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -614,7 +614,7 @@ class OPTICSWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
@@ -666,7 +666,7 @@ class SpectralClusteringWrapper(BaseClustering):
 
             labels = model.labels_
             cluster_sizes = {int(k): v for k, v in collections.Counter(labels).items()}
-            quality_metrics = self.compute_quality_metrics(data, model.labels_)
+            quality_metrics = self.compute_quality_metrics(data, labels)
 
             result = {
                 "labels": [int(x) for x in labels.tolist()],
