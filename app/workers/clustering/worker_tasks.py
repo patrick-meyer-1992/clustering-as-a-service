@@ -17,7 +17,7 @@ ALGORITHM_MAP = {
 
 
 def reseed():
-    seed = int(time.time_ns()) ^ os.getpid() ^ int.from_bytes(os.urandom(8), "little")
+    seed = (int(time.time_ns()) ^ os.getpid() ^ int.from_bytes(os.urandom(8), "little")) % (2**32)
     np.random.seed(seed)
     random.seed(seed)
 
