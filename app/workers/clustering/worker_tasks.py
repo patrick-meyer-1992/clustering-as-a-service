@@ -1,5 +1,9 @@
+import os
+import random
+import time
 from datetime import datetime
 
+import numpy as np
 from clustering import wrappers
 from utils.config import TIMEZONE
 from utils.logger import setup_logger
@@ -10,6 +14,12 @@ logger = setup_logger(__name__)
 ALGORITHM_MAP = {
     getattr(wrappers, algo).backend_name: getattr(wrappers, algo) for algo in dir(wrappers) if algo.endswith("Wrapper")
 }
+
+
+def reseed():
+    seed = int(time.time_ns()) ^ os.getpid() ^ int.from_bytes(os.urandom(8), "little")
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 @celery.task(bind=True)
@@ -23,6 +33,7 @@ def run_clustering_job(
     preprocessing_params,
     **clustering_params,
 ):
+    reseed()
     job_id = self.request.id
     logger.info(f"[{job_id}] Starting clustering job: {clustering_algorithm} on dataset: {dataset_name}")
 
